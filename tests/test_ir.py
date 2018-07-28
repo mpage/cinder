@@ -34,3 +34,14 @@ bb2:
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
     assert str(cfg) == expected_ir
+
+
+@pytest.mark.parametrize("function", [
+    single_block,
+    cond_jump,
+])
+def test_reassemble(function):
+    expected = function.__code__.co_code
+    cfg = bytecode.disassemble(expected)
+    actual = bytecode.assemble(cfg)
+    assert actual == expected

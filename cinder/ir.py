@@ -100,7 +100,7 @@ class CFGIterator:
     def __iter__(self) -> 'CFGIterator':
         return self
 
-    def __next__(self) -> Node:
+    def __next__(self) -> BasicBlock:
         while self.queue:
             node = self.queue.popleft()
             if node in self.visited:
@@ -108,6 +108,8 @@ class CFGIterator:
             for succ in self.cfg.get_successors(node):
                 self.queue.append(succ)
             self.visited.add(node)
+            if not isinstance(node, BasicBlock):
+                continue
             return node
         raise StopIteration
 
@@ -122,8 +124,8 @@ class ControlFlowGraph:
             self.exit_node: set(),
         }
 
-    def add_node(self, node: Node) -> None:
-        self.edges[node] = set()
+    def add_block(self, block: BasicBlock) -> None:
+        self.edges[block] = set()
 
     def add_edge(self, src: Node, dst: Node) -> None:
         self.edges[src].add(dst)
@@ -131,7 +133,7 @@ class ControlFlowGraph:
     def get_successors(self, node: Node) -> Iterable[Node]:
         return self.edges.get(node, set())
 
-    def __iter__(self) -> Iterator[Node]:
+    def __iter__(self) -> Iterator[BasicBlock]:
         return CFGIterator(self)
 
     def __str__(self) -> str:
@@ -155,7 +157,7 @@ def build_initial_cfg(blocks: List[BasicBlock]) -> ControlFlowGraph:
     cfg.add_edge(cfg.entry_node, blocks[0])
     block_index = {block.label: block for block in blocks}
     for i, block in enumerate(blocks):
-        cfg.add_node(block)
+        cfg.add_block(block)
         # Outgoing edges are as follows if the terminator is a:
         #   - Direct branch      => block of branch target
         #   - Conditional branch => block of branch target and next block

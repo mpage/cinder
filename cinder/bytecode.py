@@ -292,6 +292,56 @@ def disassemble(code: bytes) -> ir.ControlFlowGraph:
     return ir.build_initial_cfg(blocks)
 
 
+# TODO(mpage): Obviously rethink this. Consider a codec class that couples
+# encoding and decoding...
+def encode_ir_instruction(instr: ir.Instruction, labels: Dict[ir.Label, int]) -> Tuple[int, int]:
+    if isinstance(instr, ir.ReturnValue):
+        return Opcode.RETURN_VALUE, 0
+    elif isinstance(instr, ir.LoadFast):
+        return Opcode.LOAD_FAST, instr.index
+    elif isinstance(instr, ir.LoadConst):
+        return Opcode.LOAD_CONST, instr.index
+    elif isinstance(instr, ir.ConditionalBranch):
+        return Opcode.POP_JUMP_IF_FALSE, labels[instr.false_branch]
+    raise ValueError(f'Cannot encode {instr}')
+
+
 def assemble(cfg: ir.ControlFlowGraph) -> bytes:
     """Converts a CFG into the corresponding Python bytecode"""
-    raise NotImplementedError
+    # Arrange basic blocks in order they should appear in the bytecode
+    blocks: List[ir.BasicBlock] = []
+    cfg_iter = iter(cfg)
+    for block in cfg_iter:
+        terminator = block.terminator
+        if isinstance(terminator, ir.ConditionalBranch):
+            blocks.append(block)
+            # TODO(mpage): This is gross
+            true_block = next(cfg_iter)
+            false_block = next(cfg_iter)
+            if terminator.true_branch != true_block.label:
+                true_block, false_block = false_block, true_block
+            if (
+                terminator.opcode == Opcode.POP_JUMP_IF_TRUE or
+                terminator.opcode == Opcode.JUMP_IF_TRUE_OR_POP
+            ):
+                blocks.extend([false_block, true_block])
+            else:
+                blocks.extend([true_block, false_block])
+        else:
+            blocks.append(block)
+    # Compute block offsets
+    offsets: Dict[ir.Label, int] = {}
+    offset = 0
+    for block in blocks:
+        offsets[block.label] = offset
+        offset += len(block.instructions) * INSTRUCTION_SIZE_B
+    # Relocate jumps and generate code
+    code = bytearray(offset)
+    offset = 0
+    for block in blocks:
+        for ir_instr in block.instructions:
+            opcode, arg = encode_ir_instruction(ir_instr, offsets)
+            code[offset] = opcode
+            code[offset + 1] = arg
+            offset += 2
+    return bytes(code)
