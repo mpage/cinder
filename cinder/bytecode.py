@@ -267,12 +267,13 @@ class InstructionDecoder:
     def decode_return(self, instr: Instruction) -> ir.Instruction:
         return ir.ReturnValue()
 
+    LOAD_POOLS = {
+        Opcode.LOAD_CONST: ir.VarPool.CONSTANTS,
+        Opcode.LOAD_FAST: ir.VarPool.LOCALS,
+    }
+
     def decode_load(self, instr: Instruction) -> ir.Instruction:
-        if instr.opcode == Opcode.LOAD_FAST:
-            return ir.LoadFast(instr.argument)
-        elif instr.opcode == Opcode.LOAD_CONST:
-            return ir.LoadConst(instr.argument)
-        raise ValueError(f"Shouldn't have gotten here for instr {dis.opname[instr.opcode]}")
+        return ir.LoadRef(instr.argument, self.LOAD_POOLS[instr.opcode])
 
     def decode_cond_branch(self, instr: Instruction) -> ir.Instruction:
         if instr.opcode != Opcode.POP_JUMP_IF_FALSE:
@@ -337,20 +338,20 @@ class InstructionEncoder:
             return self.encode_return(instr)
         elif isinstance(instr, ir.ConditionalBranch):
             return self.encode_cond_branch(instr)
-        elif isinstance(instr, ir.LoadFast):
-            return self.encode_load_fast(instr)
-        elif isinstance(instr, ir.LoadConst):
-            return self.encode_load_const(instr)
+        elif isinstance(instr, ir.LoadRef):
+            return self.encode_load(instr)
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:
         return Instruction(0, Opcode.RETURN_VALUE, 0)
 
-    def encode_load_fast(self, instr: ir.LoadFast) -> Instruction:
-        return Instruction(0, Opcode.LOAD_FAST, instr.index)
+    POOL_OPCODES = {
+        ir.VarPool.LOCALS: Opcode.LOAD_FAST,
+        ir.VarPool.CONSTANTS: Opcode.LOAD_CONST,
+    }
 
-    def encode_load_const(self, instr: ir.LoadConst) -> Instruction:
-        return Instruction(0, Opcode.LOAD_CONST, instr.index)
+    def encode_load(self, instr: ir.LoadRef) -> Instruction:
+        return Instruction(0, self.POOL_OPCODES[instr.pool], instr.index)
 
     # This is a truth table mapping (pop_before_eval, jump_branch) to the
     # corresponding opcode.

@@ -17,18 +17,18 @@ def cond_jump(x):
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
-  LOAD_CONST 1
+  LOAD_REF 1 CONSTANTS
   RETURN_VALUE"""),
 
     (cond_jump, """entry:
 bb0:
-  LOAD_FAST 0
+  LOAD_REF 0 LOCALS
   COND_BRANCH true=bb1 false=bb2
 bb1:
-  LOAD_CONST 1
+  LOAD_REF 1 CONSTANTS
   RETURN_VALUE
 bb2:
-  LOAD_CONST 2
+  LOAD_REF 2 CONSTANTS
   RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):

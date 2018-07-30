@@ -28,20 +28,20 @@ class ReturnValue(Instruction):
         return 'RETURN_VALUE'
 
 
-class LoadFast(Instruction):
-    def __init__(self, index: int) -> None:
+class VarPool(enum.Enum):
+    LOCALS = 'locals'
+    CONSTANTS = 'constants'
+    NAMES = 'names'
+    CELLS = 'cells'
+
+
+class LoadRef(Instruction):
+    def __init__(self, index: int, pool: VarPool) -> None:
         self.index = index
+        self.pool = pool
 
     def __str__(self) -> str:
-        return f'LOAD_FAST {self.index}'
-
-
-class LoadConst(Instruction):
-    def __init__(self, index: int) -> None:
-        self.index = index
-
-    def __str__(self) -> str:
-        return f'LOAD_CONST {self.index}'
+        return f'LOAD_REF {self.index} {self.pool.name}'
 
 
 class ConditionalBranch(Instruction):
