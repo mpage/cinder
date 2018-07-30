@@ -112,10 +112,22 @@ class CFGIterator:
             node = self.queue.popleft()
             if node in self.visited:
                 continue
-            for succ in self.cfg.get_successors(node):
-                self.queue.append(succ)
+            succs = self.cfg.get_successors(node)
             self.visited.add(node)
-            if not isinstance(node, BasicBlock):
+            if isinstance(node, BasicBlock):
+                terminator = node.terminator
+                if isinstance(terminator, ConditionalBranch):
+                    true_block = self.cfg.blocks[terminator.true_branch]
+                    false_block = self.cfg.blocks[terminator.false_branch]
+                    # extendleft inserts into the deque in order, so items that
+                    # are to appear at the front of the queue should appear at
+                    # the end of the list
+                    succs = false_block, true_block
+                    if terminator.jump_when_true:
+                        succs = true_block, false_block
+                self.queue.extendleft(succs)
+            else:
+                self.queue.extendleft(succs)
                 continue
             return node
         raise StopIteration
@@ -130,9 +142,11 @@ class ControlFlowGraph:
             self.entry_node: set(),
             self.exit_node: set(),
         }
+        self.blocks: Dict[Label, BasicBlock] = {}
 
     def add_block(self, block: BasicBlock) -> None:
         self.edges[block] = set()
+        self.blocks[block.label] = block
 
     def add_edge(self, src: Node, dst: Node) -> None:
         self.edges[src].add(dst)

@@ -14,6 +14,16 @@ def cond_jump(x):
     return 2
 
 
+def nested_cond_jump(x, y):
+    if x:
+        if y:
+            return 1
+        return 2
+    elif y:
+        return 3
+    return 4
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -30,6 +40,29 @@ bb1:
 bb2:
   LOAD_REF 2 CONSTANTS
   RETURN_VALUE"""),
+
+    (nested_cond_jump, """entry:
+bb0:
+  LOAD_REF 0 LOCALS
+  COND_BRANCH true=bb1 false=bb4
+bb1:
+  LOAD_REF 1 LOCALS
+  COND_BRANCH true=bb2 false=bb3
+bb2:
+  LOAD_REF 1 CONSTANTS
+  RETURN_VALUE
+bb3:
+  LOAD_REF 2 CONSTANTS
+  RETURN_VALUE
+bb4:
+  LOAD_REF 1 LOCALS
+  COND_BRANCH true=bb5 false=bb6
+bb5:
+  LOAD_REF 3 CONSTANTS
+  RETURN_VALUE
+bb6:
+  LOAD_REF 4 CONSTANTS
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
@@ -39,6 +72,7 @@ def test_disassemble(function, expected_ir):
 @pytest.mark.parametrize("function", [
     single_block,
     cond_jump,
+    nested_cond_jump,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code

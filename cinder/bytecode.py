@@ -375,33 +375,17 @@ class InstructionEncoder:
 def assemble(cfg: ir.ControlFlowGraph) -> bytes:
     """Converts a CFG into the corresponding Python bytecode"""
     # Arrange basic blocks in order they should appear in the bytecode
-    blocks: List[ir.BasicBlock] = []
-    cfg_iter = iter(cfg)
-    for block in cfg_iter:
-        terminator = block.terminator
-        if isinstance(terminator, ir.ConditionalBranch):
-            blocks.append(block)
-            true_block = next(cfg_iter)
-            false_block = next(cfg_iter)
-            if true_block.label != terminator.true_branch:
-                true_block, false_block = false_block, true_block
-            if terminator.jump_when_true:
-                blocks.extend([false_block, true_block])
-            else:
-                blocks.extend([true_block, false_block])
-        else:
-            blocks.append(block)
     # Compute block offsets
     offsets: Dict[ir.Label, int] = {}
     offset = 0
-    for block in blocks:
+    for block in cfg:
         offsets[block.label] = offset
         offset += len(block.instructions) * INSTRUCTION_SIZE_B
     # Relocate jumps and generate code
     code = bytearray(offset)
     offset = 0
     encoder = InstructionEncoder(offsets)
-    for block in blocks:
+    for block in cfg:
         for ir_instr in block.instructions:
             instr = encoder.encode(ir_instr)
             code[offset] = instr.opcode
