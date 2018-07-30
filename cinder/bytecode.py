@@ -247,6 +247,48 @@ def compute_block_boundaries(code: bytes) -> List[Tuple[int, int]]:
     return boundaries
 
 
+class InstructionDecoder:
+    """Lifts bytecode instructions into ir instructions"""
+
+    def __init__(self, labels: Dict[int, ir.Label]) -> None:
+        """
+        Args:
+            labels - Maps bytecode offsets to symbol names. This is used to name
+                the jump targets for instructions that branch.
+        """
+        self.labels = labels
+
+    def decode(self, instr: Instruction) -> ir.Instruction:
+        decoder = self.decoders.get(instr.opcode, None)
+        if decoder is None:
+            raise ValueError(f'Cannot decode opcode {dis.opname[instr.opcode]}')
+        return decoder(self, instr)
+
+    def decode_return(self, instr: Instruction) -> ir.Instruction:
+        return ir.ReturnValue()
+
+    def decode_load(self, instr: Instruction) -> ir.Instruction:
+        if instr.opcode == Opcode.LOAD_FAST:
+            return ir.LoadFast(instr.argument)
+        elif instr.opcode == Opcode.LOAD_CONST:
+            return ir.LoadConst(instr.argument)
+        raise ValueError(f"Shouldn't have gotten here for instr {dis.opname[instr.opcode]}")
+
+    def decode_cond_branch(self, instr: Instruction) -> ir.Instruction:
+        if instr.opcode != Opcode.POP_JUMP_IF_FALSE:
+            raise ValueError(f"Shouldn't have gotten here for instr {dis.opname[instr.opcode]}")
+        true_br = self.labels[instr.offset + INSTRUCTION_SIZE_B]
+        false_br = self.labels[instr.argument]
+        return ir.ConditionalBranch(true_br, false_br, True, False)
+
+    decoders = {
+        Opcode.RETURN_VALUE: decode_return,
+        Opcode.LOAD_FAST: decode_load,
+        Opcode.LOAD_CONST: decode_load,
+        Opcode.POP_JUMP_IF_FALSE: decode_cond_branch,
+    }
+
+
 # Opcodes that we understand how to disassemble
 _DISASSEMBLED_OPCODES = {
     Opcode.LOAD_FAST,
@@ -254,20 +296,6 @@ _DISASSEMBLED_OPCODES = {
     Opcode.POP_JUMP_IF_FALSE,
     Opcode.RETURN_VALUE,
 }
-
-
-def get_ir_instruction(instr: Instruction, labels: Dict[int, ir.Label]) -> ir.Instruction:
-    if instr.opcode == Opcode.RETURN_VALUE:
-        return ir.ReturnValue()
-    elif instr.opcode == Opcode.LOAD_FAST:
-        return ir.LoadFast(instr.argument)
-    elif instr.opcode == Opcode.LOAD_CONST:
-        return ir.LoadConst(instr.argument)
-    elif instr.opcode == Opcode.POP_JUMP_IF_FALSE:
-        true_br = labels[instr.offset + INSTRUCTION_SIZE_B]
-        false_br = labels[instr.argument]
-        return ir.ConditionalBranch(true_br, false_br, instr.opcode)
-    raise ValueError(f'Cannot convert opcode {dis.opname[instr.opcode]}')
 
 
 def disassemble(code: bytes) -> ir.ControlFlowGraph:
@@ -284,26 +312,63 @@ def disassemble(code: bytes) -> ir.ControlFlowGraph:
         labels[interval[0]] = f'bb{i}'
     # Construct blocks
     blocks = []
+    decoder = InstructionDecoder(labels)
     for start, end in block_boundaries:
         ir_instrs = []
         for instr in BytecodeIterator(code, start, end):
-            ir_instrs.append(get_ir_instruction(instr, labels))
+            ir_instrs.append(decoder.decode(instr))
         blocks.append(ir.BasicBlock(labels[start], ir_instrs))
     return ir.build_initial_cfg(blocks)
 
 
-# TODO(mpage): Obviously rethink this. Consider a codec class that couples
-# encoding and decoding...
-def encode_ir_instruction(instr: ir.Instruction, labels: Dict[ir.Label, int]) -> Tuple[int, int]:
-    if isinstance(instr, ir.ReturnValue):
-        return Opcode.RETURN_VALUE, 0
-    elif isinstance(instr, ir.LoadFast):
-        return Opcode.LOAD_FAST, instr.index
-    elif isinstance(instr, ir.LoadConst):
-        return Opcode.LOAD_CONST, instr.index
-    elif isinstance(instr, ir.ConditionalBranch):
-        return Opcode.POP_JUMP_IF_FALSE, labels[instr.false_branch]
-    raise ValueError(f'Cannot encode {instr}')
+class InstructionEncoder:
+    """Lowers ir instructions into bytecode instructions"""
+
+    def __init__(self, offsets: Dict[ir.Label, int]) -> None:
+        """
+        Args:
+            offsets - Maps symbolic names into bytecode offsets. This is used to name
+                the jump targets for instructions that branch.
+        """
+        self.offsets = offsets
+
+    def encode(self, instr: ir.Instruction) -> Instruction:
+        if isinstance(instr, ir.ReturnValue):
+            return self.encode_return(instr)
+        elif isinstance(instr, ir.ConditionalBranch):
+            return self.encode_cond_branch(instr)
+        elif isinstance(instr, ir.LoadFast):
+            return self.encode_load_fast(instr)
+        elif isinstance(instr, ir.LoadConst):
+            return self.encode_load_const(instr)
+        raise ValueError(f'Cannot encode ir instruction {instr}')
+
+    def encode_return(self, instr: ir.ReturnValue) -> Instruction:
+        return Instruction(0, Opcode.RETURN_VALUE, 0)
+
+    def encode_load_fast(self, instr: ir.LoadFast) -> Instruction:
+        return Instruction(0, Opcode.LOAD_FAST, instr.index)
+
+    def encode_load_const(self, instr: ir.LoadConst) -> Instruction:
+        return Instruction(0, Opcode.LOAD_CONST, instr.index)
+
+    # This is a truth table mapping (pop_before_eval, jump_branch) to the
+    # corresponding opcode.
+    COND_BRANCH_OPCODES = {
+        (True, True): Opcode.POP_JUMP_IF_TRUE,
+        (True, False): Opcode.POP_JUMP_IF_FALSE,
+        (False, True): Opcode.JUMP_IF_TRUE_OR_POP,
+        (False, False): Opcode.JUMP_IF_FALSE_OR_POP,
+    }
+
+    def encode_cond_branch(self, instr: ir.ConditionalBranch) -> Instruction:
+        op_key = (instr.pop_before_eval, instr.jump_when_true)
+        opcode = self.COND_BRANCH_OPCODES[op_key]
+        if instr.jump_when_true:
+            offset = self.offsets[instr.true_branch]
+        else:
+            offset = self.offsets[instr.false_branch]
+        return Instruction(0, opcode, offset)
 
 
 def assemble(cfg: ir.ControlFlowGraph) -> bytes:
@@ -315,15 +380,11 @@ def assemble(cfg: ir.ControlFlowGraph) -> bytes:
         terminator = block.terminator
         if isinstance(terminator, ir.ConditionalBranch):
             blocks.append(block)
-            # TODO(mpage): This is gross
             true_block = next(cfg_iter)
             false_block = next(cfg_iter)
-            if terminator.true_branch != true_block.label:
+            if true_block.label != terminator.true_branch:
                 true_block, false_block = false_block, true_block
-            if (
-                terminator.opcode == Opcode.POP_JUMP_IF_TRUE or
-                terminator.opcode == Opcode.JUMP_IF_TRUE_OR_POP
-            ):
+            if terminator.jump_when_true:
                 blocks.extend([false_block, true_block])
             else:
                 blocks.extend([true_block, false_block])
@@ -338,10 +399,11 @@ def assemble(cfg: ir.ControlFlowGraph) -> bytes:
     # Relocate jumps and generate code
     code = bytearray(offset)
     offset = 0
+    encoder = InstructionEncoder(offsets)
     for block in blocks:
         for ir_instr in block.instructions:
-            opcode, arg = encode_ir_instruction(ir_instr, offsets)
-            code[offset] = opcode
-            code[offset + 1] = arg
+            instr = encoder.encode(ir_instr)
+            code[offset] = instr.opcode
+            code[offset + 1] = instr.argument
             offset += 2
     return bytes(code)

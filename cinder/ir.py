@@ -45,10 +45,17 @@ class LoadConst(Instruction):
 
 
 class ConditionalBranch(Instruction):
-    def __init__(self, true_branch: Label, false_branch: Label, opcode: int) -> None:
+    def __init__(
+        self,
+        true_branch: Label,
+        false_branch: Label,
+        pop_before_eval: bool,
+        jump_when_true: bool
+    ) -> None:
         self.true_branch = true_branch
         self.false_branch = false_branch
-        self.opcode = opcode
+        self.pop_before_eval = pop_before_eval
+        self.jump_when_true = jump_when_true
 
     def __str__(self) -> str:
         return f'COND_BRANCH true={self.true_branch} false={self.false_branch}'
