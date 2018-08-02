@@ -11,20 +11,20 @@ from cinder import jit
 #     assert result == 100
 
 
-def test_jit():
-    func, identity = jit.make_identity_func()
-    assert identity(123) is 123
+# def test_jit():
+#     identity = jit.make_identity_func()
+#     assert identity.entry(123) is 123
 
 
-class Foo:
-    def __init__(self, x):
-        self.x = x
+# class Foo:
+#     def __init__(self, x):
+#         self.x = x
 
 
-def test_loadattr():
-    foo = Foo('hi matt')
-    f, my_getattr = jit.make_getattr_func('x')
-    assert my_getattr(foo), 'hi matt'
+# def test_loadattr():
+#     foo = Foo('hi matt')
+#     f, my_getattr = jit.make_getattr_func('x')
+#     assert my_getattr(foo), 'hi matt'
 
 # def test_get_refcount():
 #     func, get_refcount = jit.make_get_refcount()
