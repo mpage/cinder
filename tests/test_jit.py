@@ -1,5 +1,7 @@
 import ctypes
 
+import cinder
+
 from cinder import jit
 
 
@@ -41,3 +43,7 @@ from cinder import jit
 #     print(get_refcount(value))
 #     ob_refcnt = ctypes.c_long.from_address(value_address)
 #     print(ob_refcnt)
+
+
+def test_jit():
+    foo = cinder.JitFunction(100)
