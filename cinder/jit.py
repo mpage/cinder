@@ -17,10 +17,10 @@ def pysym(name):
 
 
 def incref(pyobj, temp, amount=1):
-    """Increment the reference count of the PyObject* stored in pyobj.
+    """Increment the reference count of a PyObject.
 
     Args:
-        pyobj: A register storing the PyObject* being incremented
+        pyobj: A register storing a pointer to the PyObject whose refcount is being incremented
         temp: A temporary register
         amount: How much to increment the reference count by
     """
@@ -30,10 +30,10 @@ def incref(pyobj, temp, amount=1):
 
 
 def decref(pyobj, temp, amount=1):
-    """Decrement the reference count of the PyObject* stored in pyobj.
+    """Decrement the reference count of a PyObject.
 
     Args:
-        pyobj: A register storing the PyObject* being incremented
+        pyobj: A register storing a pointer to the PyObject whose refcount is being deceremented.
         temp: A temporary register
         amount: How much to decrement the reference count by
     """
@@ -42,7 +42,19 @@ def decref(pyobj, temp, amount=1):
     MOV([pyobj], temp)
 
 
+def load_fast(args, index):
+    MOV(r12, [args + index * 8])
+    incref(r12, rsi)
+    PUSH(r12)
+
+
 def load_attr(name):
+    """Call PyObject_GetAttr(<tos>, name) and push the result.
+
+    Args:
+        name: The name being looked up. This should be an ordinary Python object retrieved from the
+            co_names tuple of the code object that is being jit compiled.
+    """
     POP(rdi)
     MOV(rsi, id(name))
     MOV(rdx, pysym(b'PyObject_GetAttr'))
@@ -56,22 +68,7 @@ def load_attr(name):
 def return_value():
     # Top of stack contains PyObject*
     POP(rax)
-    decref(rax, rdx)
     RETURN(rax)
-
-
-def make_adder():
-    left = Argument(ptr())
-    right = Argument(ptr())
-    with Function("test_add", (left, right), uint64_t) as func:
-        LOAD.ARGUMENT(rdi, left)
-        LOAD.ARGUMENT(rsi, right)
-        # Yuck - how do we handle rip relative addressing?
-        MOV(rdx, pysym(b'PyNumber_Add'))
-        CALL(rdx)
-        RETURN(rax)
-    encoded_function = func.finalize(abi.detect()).encode()
-    return encoded_function.load()
 
 
 class JitFunc:
@@ -86,36 +83,6 @@ def make_identity_func():
     obj = Argument(ptr())
     with Function("identity", (obj,), uint64_t) as func:
         LOAD.ARGUMENT(rdi, obj)
-        MOV(rax, rdi)
-        RETURN(rax)
-    return JitFunc(func, (ctypes.py_object, ctypes.py_object))
-
-
-def make_getattr_func(name):
-    obj = Argument(ptr())
-    with Function("getattr", (obj,), uint64_t) as func:
-        LOAD.ARGUMENT(rdi, obj)
-        incref(rdi, rax)
-        PUSH(rdi)
-        load_attr(name)
+        load_fast(rdi, 0)
         return_value()
-    abi_func = func.finalize(abi.detect())
-    encoded_function = abi_func.encode()
-    loaded_function = encoded_function.load()
-    typ = ctypes.CFUNCTYPE(ctypes.py_object, ctypes.py_object)
-    return loaded_function, typ(loaded_function.loader.code_address)
-
-
-def make_get_refcount():
-    obj = Argument(ptr())
-    with Function("get_refcount", (obj,), uint64_t) as func:
-        LOAD.ARGUMENT(rdi, obj)
-        MOV(rax, [rdi])
-        LEA(rdx, [rax + 1])
-        MOV([rdi], rdx)
-        RETURN(rdx)
-    abi_func = func.finalize(abi.detect())
-    encoded_function = abi_func.encode()
-    loaded_function = encoded_function.load()
-    typ = ctypes.CFUNCTYPE(ctypes.c_ssize_t, ctypes.py_object)
-    return loaded_function, typ(loaded_function.loader.code_address)
+    return JitFunc(func, (ctypes.py_object, ctypes.py_object))

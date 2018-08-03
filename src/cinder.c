@@ -23,7 +23,6 @@ JitFunction_init(PyObject* self, PyObject* args, PyObject* kwargs) {
   if (!PyArg_ParseTuple(args, "k", &address)) {
     return -1;
   }
-
   ((JitFunction*) self)->entry = (jit_function_entry_t) address;
 
   return 0;
@@ -38,7 +37,7 @@ JitFunction_call(JitFunction* self, PyObject* args, PyObject* kwargs) {
   for (int i = 0; i < num_items; i++) {
     items[i] = PyTuple_GetItem(args, i);
   }
-  return Py_None;
+  return self->entry(items);
 }
 
 static PyTypeObject JitFunctionType = {
