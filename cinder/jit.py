@@ -107,4 +107,4 @@ def compile(func):
             elif isinstance(instr, ir.ReturnValue):
                 return_value()
     loaded = ppfunc.finalize(abi.detect()).encode().load()
-    return loaded, JitFunction(loaded.loader.code_address)
+    return JitFunction(loaded, loaded.loader.code_address)

@@ -4,16 +4,27 @@
 #include "cinder.h"
 
 static int
-JitFunction_init(PyObject* self, PyObject* args, PyObject* kwargs) {
+JitFunction_init(JitFunction* self, PyObject* args, PyObject* kwargs) {
   (void) kwargs;
 
   unsigned long address;
-  if (!PyArg_ParseTuple(args, "k", &address)) {
+  PyObject* code_handle;
+  if (!PyArg_ParseTuple(args, "Ok", &code_handle, &address)) {
     return -1;
   }
-  ((JitFunction*) self)->entry = (jit_function_entry_t) address;
+
+  self->entry = (jit_function_entry_t) address;
+  Py_INCREF(code_handle);
+  self->code_handle = code_handle;
 
   return 0;
+}
+
+static void
+JitFunction_dealloc(JitFunction* self)
+{
+    Py_DECREF(self->code_handle);
+    Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
 static PyObject*
@@ -37,6 +48,7 @@ PyTypeObject JitFunctionType = {
   .tp_flags = Py_TPFLAGS_DEFAULT,
   .tp_new = PyType_GenericNew,
   .tp_init = (initproc) JitFunction_init,
+  .tp_dealloc = (destructor) JitFunction_dealloc,
   .tp_call = (ternaryfunc) JitFunction_call,
 };
 
