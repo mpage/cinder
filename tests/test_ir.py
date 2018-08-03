@@ -28,6 +28,10 @@ def load_attr(x):
     return x.foo
 
 
+def unary_not(x):
+    return not x
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -73,6 +77,12 @@ bb0:
   LOAD_REF 0 LOCALS
   LOAD_ATTR 0
   RETURN_VALUE"""),
+
+    (unary_not, """entry:
+bb0:
+  LOAD_REF 0 LOCALS
+  UNARY_OP NOT
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
@@ -84,6 +94,7 @@ def test_disassemble(function, expected_ir):
     cond_jump,
     nested_cond_jump,
     load_attr,
+    unary_not,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code

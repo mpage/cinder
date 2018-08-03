@@ -69,6 +69,18 @@ class LoadAttr(Instruction):
         return f'LOAD_ATTR {self.index}'
 
 
+class UnaryOperationKind(enum.Enum):
+    NOT = 'not'
+
+
+class UnaryOperation(Instruction):
+    def __init__(self, kind: UnaryOperationKind) -> None:
+        self.kind = kind
+
+    def __str__(self) -> str:
+        return f'UNARY_OP {self.kind.name}'
+
+
 class Node:
     pass
 

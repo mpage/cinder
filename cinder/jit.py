@@ -72,6 +72,27 @@ def load_attr(name):
     decref(rdi, rsi)
     PUSH(rax)
 
+def unary_not():
+    # TODO(mpage): Error handling around call to PyObject_IsTrue
+    false_label = Label()
+    done_label = Label()
+    POP(r13)
+    MOV(rdi, r13)
+    MOV(rdx, pysym(b'PyObject_IsTrue'))
+    CALL(rdx)
+    decref(r13, r14)
+    CMP(rax, 0)
+    JNZ(false_label)
+    MOV(r13, id(True))
+    incref(r13, r14)
+    PUSH(r13)
+    JMP(done_label)
+    LABEL(false_label)
+    MOV(r13, id(False))
+    incref(r13, r14)
+    PUSH(r13)
+    LABEL(done_label)
+
 
 def return_value():
     # Top of stack contains PyObject*
@@ -84,6 +105,7 @@ _SUPPORTED_INSTRUCTIONS = {
     ir.LoadAttr,
     ir.LoadRef,
     ir.ReturnValue,
+    ir.UnaryOperation,
 }
 
 
@@ -110,5 +132,9 @@ def compile(func):
                 load_attr(code.co_names[instr.index])
             elif isinstance(instr, ir.ReturnValue):
                 return_value()
+            elif isinstance(instr, ir.UnaryOperation):
+                if instr.kind != ir.UnaryOperationKind.NOT:
+                    raise ValueError('Can only encode unary not')
+                unary_not()
     loaded = ppfunc.finalize(abi.detect()).encode().load()
     return JitFunction(loaded, loaded.loader.code_address)

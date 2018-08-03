@@ -276,8 +276,6 @@ class InstructionDecoder:
         return ir.LoadRef(instr.argument, self.LOAD_POOLS[instr.opcode])
 
     def decode_cond_branch(self, instr: Instruction) -> ir.Instruction:
-        if instr.opcode != Opcode.POP_JUMP_IF_FALSE:
-            raise ValueError(f"Shouldn't have gotten here for instr {dis.opname[instr.opcode]}")
         true_br = self.labels[instr.offset + INSTRUCTION_SIZE_B]
         false_br = self.labels[instr.argument]
         return ir.ConditionalBranch(true_br, false_br, True, False)
@@ -285,12 +283,16 @@ class InstructionDecoder:
     def decode_load_attr(self, instr: Instruction) -> ir.Instruction:
         return ir.LoadAttr(instr.argument)
 
+    def decode_unary_operation(self, instr: Instruction) -> ir.Instruction:
+        return ir.UnaryOperation(ir.UnaryOperationKind.NOT)
+
     decoders = {
         Opcode.LOAD_ATTR: decode_load_attr,
         Opcode.LOAD_CONST: decode_load,
         Opcode.LOAD_FAST: decode_load,
         Opcode.POP_JUMP_IF_FALSE: decode_cond_branch,
         Opcode.RETURN_VALUE: decode_return,
+        Opcode.UNARY_NOT: decode_unary_operation,
     }
 
 
@@ -301,6 +303,7 @@ _DISASSEMBLED_OPCODES = {
     Opcode.LOAD_FAST,
     Opcode.POP_JUMP_IF_FALSE,
     Opcode.RETURN_VALUE,
+    Opcode.UNARY_NOT,
 }
 
 
@@ -347,6 +350,8 @@ class InstructionEncoder:
             return self.encode_load(instr)
         elif isinstance(instr, ir.LoadAttr):
             return Instruction(0, Opcode.LOAD_ATTR, instr.index)
+        elif isinstance(instr, ir.UnaryOperation) and instr.kind == ir.UnaryOperationKind.NOT:
+            return Instruction(0, Opcode.UNARY_NOT, 0)
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:
