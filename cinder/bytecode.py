@@ -276,9 +276,16 @@ class InstructionDecoder:
         return ir.LoadRef(instr.argument, self.LOAD_POOLS[instr.opcode])
 
     def decode_cond_branch(self, instr: Instruction) -> ir.Instruction:
-        true_br = self.labels[instr.offset + INSTRUCTION_SIZE_B]
-        false_br = self.labels[instr.argument]
-        return ir.ConditionalBranch(true_br, false_br, True, False)
+        jump_br = self.labels[instr.argument]
+        pass_br = self.labels[instr.offset + INSTRUCTION_SIZE_B]
+        if instr.opcode == Opcode.JUMP_IF_FALSE_OR_POP:
+            return ir.ConditionalBranch(pass_br, jump_br, False, False)
+        elif instr.opcode == Opcode.JUMP_IF_TRUE_OR_POP:
+            return ir.ConditionalBranch(jump_br, pass_br, False, True)
+        elif instr.opcode == Opcode.POP_JUMP_IF_FALSE:
+            return ir.ConditionalBranch(pass_br, jump_br, True, False)
+        else:
+            raise ValueError(f'Cannot decode {dis.opname[instr.opcode]}')
 
     def decode_load_attr(self, instr: Instruction) -> ir.Instruction:
         return ir.LoadAttr(instr.argument)
@@ -287,6 +294,8 @@ class InstructionDecoder:
         return ir.UnaryOperation(ir.UnaryOperationKind.NOT)
 
     decoders = {
+        Opcode.JUMP_IF_TRUE_OR_POP: decode_cond_branch,
+        Opcode.JUMP_IF_FALSE_OR_POP: decode_cond_branch,
         Opcode.LOAD_ATTR: decode_load_attr,
         Opcode.LOAD_CONST: decode_load,
         Opcode.LOAD_FAST: decode_load,
@@ -298,6 +307,8 @@ class InstructionDecoder:
 
 # Opcodes that we understand how to disassemble
 _DISASSEMBLED_OPCODES = {
+    Opcode.JUMP_IF_TRUE_OR_POP,
+    Opcode.JUMP_IF_FALSE_OR_POP,
     Opcode.LOAD_ATTR,
     Opcode.LOAD_CONST,
     Opcode.LOAD_FAST,

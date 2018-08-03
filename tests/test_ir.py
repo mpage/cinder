@@ -32,6 +32,10 @@ def unary_not(x):
     return not x
 
 
+def two_way_cond(x, y, z):
+    return x or (not y and z)
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -83,6 +87,19 @@ bb0:
   LOAD_REF 0 LOCALS
   UNARY_OP NOT
   RETURN_VALUE"""),
+
+    (two_way_cond, """entry:
+bb0:
+  LOAD_REF 0 LOCALS
+  COND_BRANCH true=bb3 false=bb1
+bb1:
+  LOAD_REF 1 LOCALS
+  UNARY_OP NOT
+  COND_BRANCH true=bb2 false=bb3
+bb2:
+  LOAD_REF 2 LOCALS
+bb3:
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
@@ -95,6 +112,7 @@ def test_disassemble(function, expected_ir):
     nested_cond_jump,
     load_attr,
     unary_not,
+    two_way_cond,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code
