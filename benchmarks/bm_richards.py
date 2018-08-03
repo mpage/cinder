@@ -8,12 +8,7 @@ based on a Java version:
  Translation from C++, Mario Wolczko
  Outer loop added by Alex Jacoby
 """
-
-from __future__ import print_function
-
-import perf
-from six.moves import xrange
-
+import argparse
 
 # Task IDs
 I_IDLE = 1
@@ -379,7 +374,7 @@ def schedule():
 class Richards(object):
 
     def run(self, iterations):
-        for i in xrange(iterations):
+        for i in range(iterations):
             taskWorkArea.holdCount = 0
             taskWorkArea.qpktCount = 0
 
@@ -419,8 +414,8 @@ class Richards(object):
 
 
 if __name__ == "__main__":
-    runner = perf.Runner()
-    runner.metadata['description'] = "The Richards benchmark"
-
-    richard = Richards()
-    runner.bench_func('richards', richard.run, 1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--num-iterations', default=1, type=int)
+    args = parser.parse_args()
+    richards = Richards()
+    richards.run(args.num_iterations)
