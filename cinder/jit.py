@@ -81,13 +81,15 @@ def return_value():
 
 
 _SUPPORTED_INSTRUCTIONS = {
+    ir.LoadAttr,
     ir.LoadRef,
     ir.ReturnValue,
 }
 
 
 def compile(func):
-    cfg = bytecode.disassemble(func.__code__.co_code)
+    code = func.__code__
+    cfg = bytecode.disassemble(code.co_code)
     blocks = list(cfg)
     if len(blocks) != 1:
         raise ValueError('Can only compile single basic blocks right now')
@@ -104,6 +106,8 @@ def compile(func):
                     load_fast(r12, instr.index)
                 else:
                     raise ValueError('Can only load arguments')
+            elif isinstance(instr, ir.LoadAttr):
+                load_attr(code.co_names[instr.index])
             elif isinstance(instr, ir.ReturnValue):
                 return_value()
     loaded = ppfunc.finalize(abi.detect()).encode().load()

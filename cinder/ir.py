@@ -61,6 +61,14 @@ class ConditionalBranch(Instruction):
         return f'COND_BRANCH true={self.true_branch} false={self.false_branch}'
 
 
+class LoadAttr(Instruction):
+    def __init__(self, index: int) -> None:
+        self.index = index
+
+    def __str__(self) -> str:
+        return f'LOAD_ATTR {self.index}'
+
+
 class Node:
     pass
 

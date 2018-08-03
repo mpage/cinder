@@ -282,18 +282,23 @@ class InstructionDecoder:
         false_br = self.labels[instr.argument]
         return ir.ConditionalBranch(true_br, false_br, True, False)
 
+    def decode_load_attr(self, instr: Instruction) -> ir.Instruction:
+        return ir.LoadAttr(instr.argument)
+
     decoders = {
-        Opcode.RETURN_VALUE: decode_return,
-        Opcode.LOAD_FAST: decode_load,
+        Opcode.LOAD_ATTR: decode_load_attr,
         Opcode.LOAD_CONST: decode_load,
+        Opcode.LOAD_FAST: decode_load,
         Opcode.POP_JUMP_IF_FALSE: decode_cond_branch,
+        Opcode.RETURN_VALUE: decode_return,
     }
 
 
 # Opcodes that we understand how to disassemble
 _DISASSEMBLED_OPCODES = {
-    Opcode.LOAD_FAST,
+    Opcode.LOAD_ATTR,
     Opcode.LOAD_CONST,
+    Opcode.LOAD_FAST,
     Opcode.POP_JUMP_IF_FALSE,
     Opcode.RETURN_VALUE,
 }
@@ -340,6 +345,8 @@ class InstructionEncoder:
             return self.encode_cond_branch(instr)
         elif isinstance(instr, ir.LoadRef):
             return self.encode_load(instr)
+        elif isinstance(instr, ir.LoadAttr):
+            return Instruction(0, Opcode.LOAD_ATTR, instr.index)
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:
