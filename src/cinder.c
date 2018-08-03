@@ -1,11 +1,5 @@
 #include <Python.h>
-
-static PyModuleDef cinder_extension_module = {
-  PyModuleDef_HEAD_INIT,
-  .m_name = "_cinder",
-  .m_doc  = "Cinder extension code",
-  .m_size = -1,
-};
+#include <frameobject.h>
 
 // Bottom-most entry point to a JitFunction
 typedef PyObject* (*jit_function_entry_t)(PyObject**);
@@ -50,6 +44,43 @@ static PyTypeObject JitFunctionType = {
   .tp_new = PyType_GenericNew,
   .tp_init = (initproc) JitFunction_init,
   .tp_call = (ternaryfunc) JitFunction_call,
+};
+
+static _PyFrameEvalFunction old_eval_frame = NULL;
+
+extern PyObject* cinder_eval_frame(PyFrameObject* f, int throwflag);
+
+static PyObject *
+cinder_install_interpreter(PyObject *self, PyObject* args) {
+  PyThreadState *tstate = PyThreadState_GET();
+  old_eval_frame = tstate->interp->eval_frame;
+  tstate->interp->eval_frame = cinder_eval_frame;
+  Py_RETURN_NONE;
+}
+
+static PyObject *
+cinder_uninstall_interpreter(PyObject *self, PyObject* args) {
+  PyThreadState *tstate = PyThreadState_GET();
+  // TODO(mpage): Check that old_eval_frame is not null. Raise an
+  // exception if so.
+  tstate->interp->eval_frame = old_eval_frame;
+  Py_RETURN_NONE;
+}
+
+static PyMethodDef cinder_methods[] = {
+  {"install_interpreter",  cinder_install_interpreter, METH_NOARGS,
+   "Install the cinder interpreter loop."},
+  {"uninstall_interpreter", cinder_uninstall_interpreter, METH_NOARGS,
+   "Uninstall the cinder interpreter loop."},
+  {NULL, NULL, 0, NULL}
+};
+
+static PyModuleDef cinder_extension_module = {
+  PyModuleDef_HEAD_INIT,
+  .m_name = "_cinder",
+  .m_doc  = "Cinder extension code",
+  .m_methods = cinder_methods,
+  .m_size = -1,
 };
 
 PyMODINIT_FUNC

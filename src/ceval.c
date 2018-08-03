@@ -13,11 +13,6 @@
 
 #include <ctype.h>
 
-#include "marshal.h"
-#include "tracedb.h"
-
-#include <memory>
-#include <vector>
 
 typedef PyObject *(*callproc)(PyObject *, PyObject *, PyObject *);
 
@@ -38,10 +33,6 @@ static PyObject * special_lookup(PyObject *, _Py_Identifier *);
 static int check_args_iterable(PyObject *func, PyObject *vararg);
 static void format_kwargs_mapping_error(PyObject *func, PyObject *kwargs);
 static void format_awaitable_error(PyTypeObject *, int);
-
-static optrace::FrameTraceDB trace_db;
-using FinishedTraces = std::vector<std::unique_ptr<optrace::FrameTrace>>;
-static FinishedTraces finished_traces;
 
 #define NAME_ERROR_MSG \
     "name '%.200s' is not defined"
@@ -149,19 +140,8 @@ static void restore_and_clear_exc_state(PyThreadState *, PyFrameObject *);
 static int do_raise(PyObject *, PyObject *);
 static int unpack_iterable(PyObject *, int, int, PyObject **);
 
-extern "C" PyObject*
-ClearFrameTraces() {
-    auto ntraces = finished_traces.size();
-    PyObject* traces = PyTuple_New(ntraces);
-    for (FinishedTraces::size_type i = 0; i < ntraces; i++) {
-        PyTuple_SetItem(traces, i, optrace::Marshal(*finished_traces[i]));
-    }
-    finished_traces.clear();
-    return traces;
-}
-
-extern "C" PyObject *
-EvalAndTraceFrame(PyFrameObject *f, int throwflag)
+PyObject *
+cinder_eval_frame(PyFrameObject *f, int throwflag)
 {
     PyObject **stack_pointer;  /* Next free slot in value stack */
     const _Py_CODEUNIT *next_instr;
@@ -305,7 +285,6 @@ EvalAndTraceFrame(PyFrameObject *f, int throwflag)
     } while(0)
 
 /* Start of code */
-
     /* push frame */
     if (Py_EnterRecursiveCall(""))
         return NULL;
@@ -361,9 +340,6 @@ EvalAndTraceFrame(PyFrameObject *f, int throwflag)
 
     why = WHY_NOT;
 
-    /* Trace opcodes */
-    auto trace = trace_db.Checkout(f);
-
     if (throwflag) /* support for generator.throw() */
         goto error;
 
@@ -379,8 +355,6 @@ EvalAndTraceFrame(PyFrameObject *f, int throwflag)
 
         NEXTOPARG();
     dispatch_opcode:
-        trace->Record(f->f_lasti, opcode, stack_pointer);
-
         switch (opcode) {
 
         /* BEWARE!
@@ -2749,12 +2723,6 @@ fast_yield:
     Py_LeaveRecursiveCall();
     f->f_executing = 0;
     tstate->frame = f->f_back;
-
-    if (why == WHY_YIELD) {
-        trace_db.Return(f, std::move(trace));
-    } else {
-        finished_traces.push_back(std::move(trace));
-    }
 
     return _Py_CheckFunctionResult(NULL, retval, "PyEval_EvalFrameEx");
 }
