@@ -1,9 +1,15 @@
 import ctypes
+import types
 
+from cinder import (
+    bytecode,
+    ir,
+    JitFunction,
+)
 from ctypes import pythonapi
 from peachpy import *
 from peachpy.x86_64 import *
-from peachpy.x86_64.registers import rsp
+from typing import Tuple
 
 dllib = ctypes.CDLL(None)
 dllib.dlsym.restype = ctypes.c_void_p
@@ -74,18 +80,31 @@ def return_value():
     RETURN(rax)
 
 
-class JitFunc:
-    def __init__(self, func, sig):
-        self.loaded = func.finalize(abi.detect()).encode().load()
-        typ = ctypes.CFUNCTYPE(*sig)
-        self.entry = typ(self.loaded.loader.code_address)
-        self.address = self.loaded.loader.code_address
+_SUPPORTED_INSTRUCTIONS = {
+    ir.LoadRef,
+    ir.ReturnValue,
+}
 
 
-def make_identity_func():
-    obj = Argument(ptr())
-    with Function("identity", (obj,), uint64_t) as func:
-        LOAD.ARGUMENT(rdi, obj)
-        load_fast(rdi, 0)
-        return_value()
-    return JitFunc(func, (ctypes.py_object, ctypes.py_object))
+def compile(func):
+    cfg = bytecode.disassemble(func.__code__.co_code)
+    blocks = list(cfg)
+    if len(blocks) != 1:
+        raise ValueError('Can only compile single basic blocks right now')
+    block = blocks[0]
+    for instr in block.instructions:
+        if instr.__class__ not in _SUPPORTED_INSTRUCTIONS:
+            raise ValueError(f'Cannot compile {instr}')
+    args = Argument(ptr())
+    with Function(func.__name__, (args,), uint64_t) as ppfunc:
+        LOAD.ARGUMENT(r12, args)
+        for instr in block.instructions:
+            if isinstance(instr, ir.LoadRef):
+                if instr.pool == ir.VarPool.LOCALS:
+                    load_fast(r12, instr.index)
+                else:
+                    raise ValueError('Can only load arguments')
+            elif isinstance(instr, ir.ReturnValue):
+                return_value()
+    loaded = ppfunc.finalize(abi.detect()).encode().load()
+    return loaded, JitFunction(loaded.loader.code_address)

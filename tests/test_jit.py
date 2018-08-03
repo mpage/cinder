@@ -1,8 +1,10 @@
-import cinder
-import cinder.jit
+from cinder import jit
+
+
+def identity(x):
+    return x
 
 
 def test_jit():
-    identity = cinder.jit.make_identity_func()
-    foo = cinder.JitFunction(identity.address)
+    _, foo = jit.compile(identity)
     assert foo(100) == 100
