@@ -29,6 +29,18 @@ JitFunction_init(PyObject* self, PyObject* args, PyObject* kwargs) {
   return 0;
 }
 
+static PyObject*
+JitFunction_call(JitFunction* self, PyObject* args, PyObject* kwargs) {
+  // TODO(mpage): Make this real - keywords and defaulting
+  Py_ssize_t num_items = PyTuple_Size(args);
+  PyObject** items = (PyObject**) alloca(num_items * sizeof(PyObject*));
+  assert(items != NULL);
+  for (int i = 0; i < num_items; i++) {
+    items[i] = PyTuple_GetItem(args, i);
+  }
+  return Py_None;
+}
+
 static PyTypeObject JitFunctionType = {
   PyVarObject_HEAD_INIT(NULL, 0)
   .tp_name = "cinder.JitFunction",
@@ -38,6 +50,7 @@ static PyTypeObject JitFunctionType = {
   .tp_flags = Py_TPFLAGS_DEFAULT,
   .tp_new = PyType_GenericNew,
   .tp_init = (initproc) JitFunction_init,
+  .tp_call = (ternaryfunc) JitFunction_call,
 };
 
 PyMODINIT_FUNC
@@ -51,8 +64,6 @@ PyInit__cinder(void)
   if (m == NULL) {
     return NULL;
   }
-
-  printf("Hi matt\n");
 
   Py_INCREF(&JitFunctionType);
   PyModule_AddObject(m, "JitFunction", (PyObject *) &JitFunctionType);

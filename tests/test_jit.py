@@ -47,3 +47,4 @@ from cinder import jit
 
 def test_jit():
     foo = cinder.JitFunction(100)
+    assert foo() == None
