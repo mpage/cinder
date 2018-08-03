@@ -43,6 +43,7 @@ def decref(pyobj, temp, amount=1):
 
 
 def load_fast(args, index):
+    # TODO(mpage): Error handling
     MOV(r12, [args + index * 8])
     incref(r12, rsi)
     PUSH(r12)
@@ -55,6 +56,7 @@ def load_attr(name):
         name: The name being looked up. This should be an ordinary Python object retrieved from the
             co_names tuple of the code object that is being jit compiled.
     """
+    # TODO(mpage): Error handling
     POP(rdi)
     MOV(rsi, id(name))
     MOV(rdx, pysym(b'PyObject_GetAttr'))
@@ -67,6 +69,7 @@ def load_attr(name):
 
 def return_value():
     # Top of stack contains PyObject*
+    # TODO(mpage): Decref any remaining items on the stack
     POP(rax)
     RETURN(rax)
 
