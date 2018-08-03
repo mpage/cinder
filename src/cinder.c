@@ -1,13 +1,7 @@
 #include <Python.h>
 #include <frameobject.h>
 
-// Bottom-most entry point to a JitFunction
-typedef PyObject* (*jit_function_entry_t)(PyObject**);
-
-typedef struct {
-  PyObject_HEAD
-  jit_function_entry_t entry;
-} JitFunction;
+#include "cinder.h"
 
 static int
 JitFunction_init(PyObject* self, PyObject* args, PyObject* kwargs) {
@@ -34,7 +28,7 @@ JitFunction_call(JitFunction* self, PyObject* args, PyObject* kwargs) {
   return self->entry(items);
 }
 
-static PyTypeObject JitFunctionType = {
+PyTypeObject JitFunctionType = {
   PyVarObject_HEAD_INIT(NULL, 0)
   .tp_name = "cinder.JitFunction",
   .tp_doc = "Jit compiled python functions",

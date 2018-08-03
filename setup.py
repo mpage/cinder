@@ -7,6 +7,7 @@ _cinder = Extension(
     '_cinder',
     define_macros=[('MAJOR_VERSION', '0'),
                    ('MINOR_VERSION', '1')],
+    include_dirs=['src'],
     sources=['src/cinder.c', 'src/ceval.c'])
 
 

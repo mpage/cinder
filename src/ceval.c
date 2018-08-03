@@ -13,6 +13,8 @@
 
 #include <ctype.h>
 
+#include "cinder.h"
+
 
 typedef PyObject *(*callproc)(PyObject *, PyObject *, PyObject *);
 
@@ -3418,6 +3420,8 @@ Error:
     return 0;
 }
 
+extern PyTypeObject JitFunctionType;
+
 static PyObject *
 call_function(PyObject ***pp_stack, Py_ssize_t oparg, PyObject *kwnames)
 {
@@ -3427,6 +3431,7 @@ call_function(PyObject ***pp_stack, Py_ssize_t oparg, PyObject *kwnames)
     Py_ssize_t nkwargs = (kwnames == NULL) ? 0 : PyTuple_GET_SIZE(kwnames);
     Py_ssize_t nargs = oparg - nkwargs;
     PyObject **stack;
+
 
     /* Always dispatch PyCFunction first, because these are
        presumed to be the most frequent callable object.
@@ -3453,6 +3458,8 @@ call_function(PyObject ***pp_stack, Py_ssize_t oparg, PyObject *kwnames)
 
         if (PyFunction_Check(func)) {
             x = fast_function(func, stack, nargs, kwnames);
+        } else if (Py_TYPE(func) == &JitFunctionType) {
+            x = ((JitFunction*) func)->entry(stack);
         }
         else {
             x = _PyObject_FastCallKeywords(func, stack, nargs, kwnames);
