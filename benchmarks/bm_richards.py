@@ -202,7 +202,7 @@ class Task(TaskState):
         return old
 
     def runTask(self):
-        if self.isWaitingWithPacket():
+        if Task.isWaitingWithPacket(self):
             msg = self.input
             self.input = msg.link
             if self.input is None:
@@ -363,7 +363,7 @@ def schedule():
         if tracing:
             print("tcb =", t.ident)
 
-        if t.isTaskHoldingOrWaiting():
+        if TaskState.isTaskHoldingOrWaiting(t):
             t = t.link
         else:
             if tracing:
@@ -415,7 +415,16 @@ class Richards(object):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num-iterations', default=1, type=int)
+    parser.add_argument('--num-iters', default=1, type=int)
+    parser.add_argument('--use-jit', action='store_true')
     args = parser.parse_args()
     richards = Richards()
-    richards.run(args.num_iterations)
+    if args.use_jit:
+        import cinder
+        from cinder import jit
+        cinder.install_interpreter()
+        TaskState.isTaskHoldingOrWaiting = jit.compile(TaskState.isTaskHoldingOrWaiting)
+        TaskState.isWaitingWithPacket = jit.compile(TaskState.isWaitingWithPacket)
+    richards.run(args.num_iters)
+    if args.use_jit:
+        cinder.uninstall_interpreter()
