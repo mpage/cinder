@@ -18,6 +18,12 @@ def invert(x):
     return not x
 
 
+def cond_branch(x, y, z):
+    if x:
+        return y
+    return z
+
+
 def test_load_fast_and_return_value():
     foo = jit.compile(identity)
     assert foo(100) == 100
@@ -34,3 +40,11 @@ def test_invert():
     assert jit_invert(False) == True
     assert jit_invert(True) == False
     assert jit_invert(1) == False
+
+
+def test_cond_branch():
+    test = jit.compile(cond_branch)
+    assert test(True, 1, 2) == 1
+    assert test(False, 1, 2) == 2
+    assert test(1, 'foo', 'bar') == 'foo'
+    assert test(0, 'foo', 'bar') == 'bar'

@@ -50,9 +50,9 @@ def decref(pyobj, temp, amount=1):
 
 def load_fast(args, index):
     # TODO(mpage): Error handling
-    MOV(r12, [args + index * 8])
-    incref(r12, rsi)
-    PUSH(r12)
+    MOV(rdi, [args + index * 8])
+    incref(rdi, rsi)
+    PUSH(rdi)
 
 
 def load_attr(name):
@@ -71,6 +71,7 @@ def load_attr(name):
     POP(rdi)
     decref(rdi, rsi)
     PUSH(rax)
+
 
 def unary_not():
     # TODO(mpage): Error handling around call to PyObject_IsTrue
@@ -94,6 +95,59 @@ def unary_not():
     LABEL(done_label)
 
 
+def conditional_branch(instr, labels):
+    # TODO(mpage): Error handling
+    MOV(r14, id(True))
+    MOV(r15, id(False))
+    true, false = r14, r15
+    if instr.pop_before_eval:
+        fall_through = Label()
+        do_branch = Label()
+        POP(r13)
+        if instr.jump_when_true:
+            # TOS == Py_False?
+            CMP(r13, false)
+            JE(fall_through)
+            # TOS == Py_True?
+            CMP(r13, true)
+            JE(do_branch)
+            # Call PyObject_IsTrue(TOS)
+            MOV(rdi, r13)
+            MOV(rsi, pysym(b'PyObject_IsTrue'))
+            CALL(rsi)
+            CMP(rax, 0)
+            JE(fall_through)
+            # TOS is truthy, do the branch
+            LABEL(do_branch)
+            decref(r13, r14)
+            JMP(labels[instr.true_branch])
+            # TOS is falsey, fall through
+            LABEL(fall_through)
+            decref(r13, r14)
+        else:
+            # TOS == Py_True?
+            CMP(r13, true)
+            JE(fall_through)
+            # TOS == Py_False?
+            CMP(r13, false)
+            JE(do_branch)
+            # Call PyObject_IsTrue(TOS)
+            MOV(rdi, r13)
+            MOV(rsi, pysym(b'PyObject_IsTrue'))
+            CALL(rsi)
+            CMP(rax, 0)
+            JG(fall_through)
+            # TOS is truthy, do the branch
+            LABEL(do_branch)
+            decref(r13, r14)
+            JMP(labels[instr.false_branch])
+            # TOS is falsey, fall through
+            LABEL(fall_through)
+            decref(r13, r14)
+    else:
+        raise Exception('Unimplemented')
+
+
 def return_value():
     # Top of stack contains PyObject*
     # TODO(mpage): Decref any remaining items on the stack
@@ -102,6 +156,7 @@ def return_value():
 
 
 _SUPPORTED_INSTRUCTIONS = {
+    ir.ConditionalBranch,
     ir.LoadAttr,
     ir.LoadRef,
     ir.ReturnValue,
@@ -113,28 +168,33 @@ def compile(func):
     code = func.__code__
     cfg = bytecode.disassemble(code.co_code)
     blocks = list(cfg)
-    if len(blocks) != 1:
-        raise ValueError('Can only compile single basic blocks right now')
-    block = blocks[0]
-    for instr in block.instructions:
-        if instr.__class__ not in _SUPPORTED_INSTRUCTIONS:
-            raise ValueError(f'Cannot compile {instr}')
+    for block in blocks:
+        for instr in block.instructions:
+            if instr.__class__ not in _SUPPORTED_INSTRUCTIONS:
+                raise ValueError(f'Cannot compile {instr}')
     args = Argument(ptr())
     with Function(func.__name__, (args,), uint64_t) as ppfunc:
         LOAD.ARGUMENT(r12, args)
-        for instr in block.instructions:
-            if isinstance(instr, ir.LoadRef):
-                if instr.pool == ir.VarPool.LOCALS:
-                    load_fast(r12, instr.index)
-                else:
-                    raise ValueError('Can only load arguments')
-            elif isinstance(instr, ir.LoadAttr):
-                load_attr(code.co_names[instr.index])
-            elif isinstance(instr, ir.ReturnValue):
-                return_value()
-            elif isinstance(instr, ir.UnaryOperation):
-                if instr.kind != ir.UnaryOperationKind.NOT:
-                    raise ValueError('Can only encode unary not')
-                unary_not()
-    loaded = ppfunc.finalize(abi.detect()).encode().load()
+        labels = {block.label: Label() for block in blocks}
+        for block in blocks:
+            LABEL(labels[block.label])
+            for instr in block.instructions:
+                if isinstance(instr, ir.LoadRef):
+                    if instr.pool == ir.VarPool.LOCALS:
+                        load_fast(r12, instr.index)
+                    else:
+                        raise ValueError('Can only load arguments')
+                elif isinstance(instr, ir.LoadAttr):
+                    load_attr(code.co_names[instr.index])
+                elif isinstance(instr, ir.ReturnValue):
+                    return_value()
+                elif isinstance(instr, ir.UnaryOperation):
+                    if instr.kind != ir.UnaryOperationKind.NOT:
+                        raise ValueError('Can only encode unary not')
+                    unary_not()
+                elif isinstance(instr, ir.ConditionalBranch):
+                    conditional_branch(instr, labels)
+    encoded = ppfunc.finalize(abi.detect()).encode()
+    print(encoded.format())
+    loaded = encoded.load()
     return JitFunction(loaded, loaded.loader.code_address)
