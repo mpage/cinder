@@ -44,6 +44,16 @@ class Load(Instruction):
         return f'LOAD {self.index} {self.pool.name}'
 
 
+class Store(Instruction):
+    """Only stores into locals"""
+
+    def __init__(self, index: int) -> None:
+        self.index = index
+
+    def __str__(self) -> str:
+        return f'STORE {self.index}'
+
+
 class ConditionalBranch(Instruction):
     def __init__(
         self,

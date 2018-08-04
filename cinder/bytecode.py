@@ -293,6 +293,9 @@ class InstructionDecoder:
     def decode_unary_operation(self, instr: Instruction) -> ir.Instruction:
         return ir.UnaryOperation(ir.UnaryOperationKind.NOT)
 
+    def decode_store(self, instr: Instruction) -> ir.Instruction:
+        return ir.Store(instr.argument)
+
     decoders = {
         Opcode.JUMP_IF_TRUE_OR_POP: decode_cond_branch,
         Opcode.JUMP_IF_FALSE_OR_POP: decode_cond_branch,
@@ -301,6 +304,7 @@ class InstructionDecoder:
         Opcode.LOAD_FAST: decode_load,
         Opcode.POP_JUMP_IF_FALSE: decode_cond_branch,
         Opcode.RETURN_VALUE: decode_return,
+        Opcode.STORE_FAST: decode_store,
         Opcode.UNARY_NOT: decode_unary_operation,
     }
 
@@ -314,6 +318,7 @@ _DISASSEMBLED_OPCODES = {
     Opcode.LOAD_FAST,
     Opcode.POP_JUMP_IF_FALSE,
     Opcode.RETURN_VALUE,
+    Opcode.STORE_FAST,
     Opcode.UNARY_NOT,
 }
 
@@ -363,6 +368,8 @@ class InstructionEncoder:
             return Instruction(0, Opcode.LOAD_ATTR, instr.index)
         elif isinstance(instr, ir.UnaryOperation) and instr.kind == ir.UnaryOperationKind.NOT:
             return Instruction(0, Opcode.UNARY_NOT, 0)
+        elif isinstance(instr, ir.Store):
+            return Instruction(0, Opcode.STORE_FAST, instr.index)
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:
