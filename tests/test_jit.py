@@ -18,10 +18,18 @@ def invert(x):
     return not x
 
 
-def cond_branch(x, y, z):
+def pop_jump(x, y, z):
     if x:
         return y
     return z
+
+
+def jump_if_true(x, y):
+    return x or y
+
+
+def jump_if_false(x, y):
+    return x and y
 
 
 def test_load_fast_and_return_value():
@@ -42,9 +50,25 @@ def test_invert():
     assert jit_invert(1) == False
 
 
-def test_cond_branch():
-    test = jit.compile(cond_branch)
+def test_pop_jump():
+    test = jit.compile(pop_jump)
     assert test(True, 1, 2) == 1
     assert test(False, 1, 2) == 2
     assert test(1, 'foo', 'bar') == 'foo'
     assert test(0, 'foo', 'bar') == 'bar'
+
+
+def test_jump_if_true():
+    test = jit.compile(jump_if_true)
+    assert test(True, False) == True
+    assert test(False, 1) == 1
+    assert test(0, 'foo') == 'foo'
+    assert test(1, 'bar') == 1
+
+
+def test_jump_if_false():
+    test = jit.compile(jump_if_false)
+    assert test(False, 1) == False
+    assert test(True, 1) == 1
+    assert test(0, 'foo') == 0
+    assert test(1, 'bar') == 'bar'

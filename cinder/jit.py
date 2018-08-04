@@ -9,6 +9,7 @@ from cinder import (
 from ctypes import pythonapi
 from peachpy import *
 from peachpy.x86_64 import *
+from peachpy.x86_64.registers import rsp
 from typing import Tuple
 
 dllib = ctypes.CDLL(None)
@@ -100,9 +101,9 @@ def conditional_branch(instr, labels):
     MOV(r14, id(True))
     MOV(r15, id(False))
     true, false = r14, r15
+    fall_through = Label()
+    do_branch = Label()
     if instr.pop_before_eval:
-        fall_through = Label()
-        do_branch = Label()
         POP(r13)
         if instr.jump_when_true:
             # TOS == Py_False?
@@ -145,7 +146,42 @@ def conditional_branch(instr, labels):
             LABEL(fall_through)
             decref(r13, r14)
     else:
-        raise Exception('Unimplemented')
+        MOV(r13, [rsp])
+        if instr.jump_when_true:
+            # TOS == Py_False?
+            CMP(r13, false)
+            JE(fall_through)
+            CMP(r13, true)
+            JE(labels[instr.true_branch])
+            # Call PyObject_IsTrue(TOS)
+            MOV(rdi, r13)
+            MOV(rsi, pysym(b'PyObject_IsTrue'))
+            CALL(rsi)
+            # TOS is truthy, jump
+            CMP(rax, 0)
+            JG(labels[instr.true_branch])
+            # TOS is falsey, pop and fall through
+            LABEL(fall_through)
+            decref(r13, r14)
+            ADD(rsp, 8)
+        else:
+            # TOS == Py_True?
+            CMP(r13, true)
+            JE(fall_through)
+            CMP(r13, false)
+            # TOS is false, jump
+            JE(labels[instr.false_branch])
+            # Call PyObject_IsTrue(TOS)
+            MOV(rdi, r13)
+            MOV(rsi, pysym(b'PyObject_IsTrue'))
+            CALL(rsi)
+            # TOS is falsey, jump
+            CMP(rax, 0)
+            JE(labels[instr.false_branch])
+            # TOS is truthy, pop and fall through
+            LABEL(fall_through)
+            decref(r13, r14)
+            ADD(rsp, 8)
 
 
 def return_value():
@@ -195,6 +231,5 @@ def compile(func):
                 elif isinstance(instr, ir.ConditionalBranch):
                     conditional_branch(instr, labels)
     encoded = ppfunc.finalize(abi.detect()).encode()
-    print(encoded.format())
     loaded = encoded.load()
     return JitFunction(loaded, loaded.loader.code_address)
