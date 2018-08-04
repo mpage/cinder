@@ -273,7 +273,7 @@ class InstructionDecoder:
     }
 
     def decode_load(self, instr: Instruction) -> ir.Instruction:
-        return ir.LoadRef(instr.argument, self.LOAD_POOLS[instr.opcode])
+        return ir.Load(instr.argument, self.LOAD_POOLS[instr.opcode])
 
     def decode_cond_branch(self, instr: Instruction) -> ir.Instruction:
         jump_br = self.labels[instr.argument]
@@ -357,7 +357,7 @@ class InstructionEncoder:
             return self.encode_return(instr)
         elif isinstance(instr, ir.ConditionalBranch):
             return self.encode_cond_branch(instr)
-        elif isinstance(instr, ir.LoadRef):
+        elif isinstance(instr, ir.Load):
             return self.encode_load(instr)
         elif isinstance(instr, ir.LoadAttr):
             return Instruction(0, Opcode.LOAD_ATTR, instr.index)
@@ -373,7 +373,7 @@ class InstructionEncoder:
         ir.VarPool.CONSTANTS: Opcode.LOAD_CONST,
     }
 
-    def encode_load(self, instr: ir.LoadRef) -> Instruction:
+    def encode_load(self, instr: ir.Load) -> Instruction:
         return Instruction(0, self.POOL_OPCODES[instr.pool], instr.index)
 
     # This is a truth table mapping (pop_before_eval, jump_branch) to the

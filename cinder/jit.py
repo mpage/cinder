@@ -194,7 +194,7 @@ def return_value():
 _SUPPORTED_INSTRUCTIONS = {
     ir.ConditionalBranch,
     ir.LoadAttr,
-    ir.LoadRef,
+    ir.Load,
     ir.ReturnValue,
     ir.UnaryOperation,
 }
@@ -215,7 +215,7 @@ def compile(func):
         for block in blocks:
             LABEL(labels[block.label])
             for instr in block.instructions:
-                if isinstance(instr, ir.LoadRef):
+                if isinstance(instr, ir.Load):
                     if instr.pool == ir.VarPool.LOCALS:
                         load_fast(r12, instr.index)
                     else:

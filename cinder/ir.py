@@ -35,13 +35,13 @@ class VarPool(enum.Enum):
     CELLS = 'cells'
 
 
-class LoadRef(Instruction):
+class Load(Instruction):
     def __init__(self, index: int, pool: VarPool) -> None:
         self.index = index
         self.pool = pool
 
     def __str__(self) -> str:
-        return f'LOAD_REF {self.index} {self.pool.name}'
+        return f'LOAD {self.index} {self.pool.name}'
 
 
 class ConditionalBranch(Instruction):

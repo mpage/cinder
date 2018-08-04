@@ -39,65 +39,65 @@ def two_way_cond(x, y, z):
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
-  LOAD_REF 1 CONSTANTS
+  LOAD 1 CONSTANTS
   RETURN_VALUE"""),
 
     (cond_jump, """entry:
 bb0:
-  LOAD_REF 0 LOCALS
+  LOAD 0 LOCALS
   COND_BRANCH true=bb1 false=bb2
 bb1:
-  LOAD_REF 1 CONSTANTS
+  LOAD 1 CONSTANTS
   RETURN_VALUE
 bb2:
-  LOAD_REF 2 CONSTANTS
+  LOAD 2 CONSTANTS
   RETURN_VALUE"""),
 
     (nested_cond_jump, """entry:
 bb0:
-  LOAD_REF 0 LOCALS
+  LOAD 0 LOCALS
   COND_BRANCH true=bb1 false=bb4
 bb1:
-  LOAD_REF 1 LOCALS
+  LOAD 1 LOCALS
   COND_BRANCH true=bb2 false=bb3
 bb2:
-  LOAD_REF 1 CONSTANTS
+  LOAD 1 CONSTANTS
   RETURN_VALUE
 bb3:
-  LOAD_REF 2 CONSTANTS
+  LOAD 2 CONSTANTS
   RETURN_VALUE
 bb4:
-  LOAD_REF 1 LOCALS
+  LOAD 1 LOCALS
   COND_BRANCH true=bb5 false=bb6
 bb5:
-  LOAD_REF 3 CONSTANTS
+  LOAD 3 CONSTANTS
   RETURN_VALUE
 bb6:
-  LOAD_REF 4 CONSTANTS
+  LOAD 4 CONSTANTS
   RETURN_VALUE"""),
 
     (load_attr, """entry:
 bb0:
-  LOAD_REF 0 LOCALS
+  LOAD 0 LOCALS
   LOAD_ATTR 0
   RETURN_VALUE"""),
 
     (unary_not, """entry:
 bb0:
-  LOAD_REF 0 LOCALS
+  LOAD 0 LOCALS
   UNARY_OP NOT
   RETURN_VALUE"""),
 
     (two_way_cond, """entry:
 bb0:
-  LOAD_REF 0 LOCALS
+  LOAD 0 LOCALS
   COND_BRANCH true=bb3 false=bb1
 bb1:
-  LOAD_REF 1 LOCALS
+  LOAD 1 LOCALS
   UNARY_OP NOT
   COND_BRANCH true=bb2 false=bb3
 bb2:
-  LOAD_REF 2 LOCALS
+  LOAD 2 LOCALS
 bb3:
   RETURN_VALUE"""),
 ])
