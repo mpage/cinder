@@ -71,6 +71,14 @@ class ConditionalBranch(Instruction):
         return f'COND_BRANCH true={self.true_branch} false={self.false_branch}'
 
 
+class Branch(Instruction):
+    def __init__(self, target: Label) -> None:
+        self.target = target
+
+    def __str__(self) -> str:
+        return f'BRANCH {self.target}'
+
+
 class LoadAttr(Instruction):
     def __init__(self, index: int) -> None:
         self.index = index
@@ -107,13 +115,17 @@ class BasicBlock(Node):
     def __init__(
         self,
         label: Label,
-        instructions: List[Instruction]
+        instructions: List[Instruction],
+        is_loop_header: bool = False,
+        is_loop_footer: bool = False
     ) -> None:
         if len(instructions) == 0:
             raise ValueError('Basic blocks cannot be empty')
         self.label = label
         self.instructions = instructions
         self.terminator = instructions[-1]
+        self.is_loop_header = is_loop_header
+        self.is_loop_footer = is_loop_footer
 
     def __str__(self) -> str:
         lines = [
@@ -151,7 +163,7 @@ class CFGIterator:
                     false_block = self.cfg.blocks[terminator.false_branch]
                     # extendleft inserts into the deque in order, so items that
                     # are to appear at the front of the queue should appear at
-                    # the end of the list
+                    # the end of this list
                     succs = false_block, true_block
                     if terminator.jump_when_true:
                         succs = true_block, false_block

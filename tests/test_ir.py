@@ -1,4 +1,3 @@
-import dis
 import pytest
 
 from cinder import bytecode
@@ -39,6 +38,12 @@ def two_way_cond(x, y, z):
 def store_local(x):
     y = x
     return y
+
+
+def while_loop(x):
+    while x:
+        pass
+    return x
 
 
 @pytest.mark.parametrize("function,expected_ir", [
@@ -112,9 +117,20 @@ bb0:
   STORE 1
   LOAD 1 LOCALS
   RETURN_VALUE"""),
+
+    (while_loop, """entry:
+bb1:
+  LOAD 0 LOCALS
+  COND_BRANCH true=bb2 false=bb3
+bb2:
+  BRANCH bb1
+bb3:
+  LOAD 0 LOCALS
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
+    print(str(cfg))
     assert str(cfg) == expected_ir
 
 
@@ -126,6 +142,7 @@ def test_disassemble(function, expected_ir):
     unary_not,
     two_way_cond,
     store_local,
+    while_loop,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code

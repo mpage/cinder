@@ -296,7 +296,11 @@ class InstructionDecoder:
     def decode_store(self, instr: Instruction) -> ir.Instruction:
         return ir.Store(instr.argument)
 
+    def decode_branch(self, instr: Instruction) -> ir.Instruction:
+        return ir.Branch(self.labels[instr.argument])
+
     decoders = {
+        Opcode.JUMP_ABSOLUTE: decode_branch,
         Opcode.JUMP_IF_TRUE_OR_POP: decode_cond_branch,
         Opcode.JUMP_IF_FALSE_OR_POP: decode_cond_branch,
         Opcode.LOAD_ATTR: decode_load_attr,
@@ -311,6 +315,7 @@ class InstructionDecoder:
 
 # Opcodes that we understand how to disassemble
 _DISASSEMBLED_OPCODES = {
+    Opcode.JUMP_ABSOLUTE,
     Opcode.JUMP_IF_TRUE_OR_POP,
     Opcode.JUMP_IF_FALSE_OR_POP,
     Opcode.LOAD_ATTR,
@@ -321,6 +326,11 @@ _DISASSEMBLED_OPCODES = {
     Opcode.STORE_FAST,
     Opcode.UNARY_NOT,
 }
+
+
+def is_block_setup(code: bytes, start: int, end: int) -> bool:
+    return ((start + INSTRUCTION_SIZE_B == end) and
+            (code[start] == Opcode.SETUP_LOOP))
 
 
 def disassemble(code: bytes) -> ir.ControlFlowGraph:
@@ -339,10 +349,22 @@ def disassemble(code: bytes) -> ir.ControlFlowGraph:
     blocks = []
     decoder = InstructionDecoder(labels)
     for start, end in block_boundaries:
+        if is_block_setup(code, start, end):
+            # Skip basic blocks that only set up the block stack
+            continue
+        is_loop_header = False
+        is_loop_footer = False
         ir_instrs = []
         for instr in BytecodeIterator(code, start, end):
-            ir_instrs.append(decoder.decode(instr))
-        blocks.append(ir.BasicBlock(labels[start], ir_instrs))
+            if instr.opcode == Opcode.POP_BLOCK:
+                is_loop_footer = True
+            else:
+                if start >= 2 and code[start - 2] == Opcode.SETUP_LOOP:
+                    is_loop_header = True
+                ir_instrs.append(decoder.decode(instr))
+                prev_instr = instr
+        blocks.append(ir.BasicBlock(
+            labels[start], ir_instrs, is_loop_header, is_loop_footer))
     return ir.build_initial_cfg(blocks)
 
 
@@ -370,6 +392,8 @@ class InstructionEncoder:
             return Instruction(0, Opcode.UNARY_NOT, 0)
         elif isinstance(instr, ir.Store):
             return Instruction(0, Opcode.STORE_FAST, instr.index)
+        elif isinstance(instr, ir.Branch):
+            return Instruction(0, Opcode.JUMP_ABSOLUTE, self.offsets[instr.target])
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:
@@ -410,12 +434,37 @@ def assemble(cfg: ir.ControlFlowGraph) -> bytes:
     offset = 0
     for block in cfg:
         offsets[block.label] = offset
-        offset += len(block.instructions) * INSTRUCTION_SIZE_B
+        num_instrs = len(block.instructions)
+        if block.is_loop_header or block.is_loop_footer:
+            # We need to insert SETUP_LOOP in the case of loop headers and
+            # POP_BLOCK in the case of loop footers.
+            num_instrs += 1
+        offset += num_instrs * INSTRUCTION_SIZE_B
+    # Adjust block offsets so that loop headers don't include SETUP_LOOP
+    for block in cfg:
+        if block.is_loop_header:
+            offsets[block.label] += INSTRUCTION_SIZE_B
     # Relocate jumps and generate code
     code = bytearray(offset)
     offset = 0
     encoder = InstructionEncoder(offsets)
     for block in cfg:
+        if block.is_loop_header:
+            footer = None
+            for succ in cfg.get_successors(block):
+                if not isinstance(succ, ir.BasicBlock):
+                    continue
+                if succ.is_loop_footer:
+                    footer = succ.label
+                    break
+            assert footer is not None
+            code[offset] = Opcode.SETUP_LOOP
+            code[offset + 1] = offsets[footer] - offset
+            offset += 2
+        elif block.is_loop_footer:
+            code[offset] = Opcode.POP_BLOCK
+            code[offset + 1] = 0
+            offset += 2
         for ir_instr in block.instructions:
             instr = encoder.encode(ir_instr)
             code[offset] = instr.opcode
