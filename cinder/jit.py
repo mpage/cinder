@@ -80,20 +80,45 @@ def pop_top():
 def load_attr(name):
     """Call PyObject_GetAttr(<tos>, name) and push the result.
 
+    NB: This embeds a pointer to the constant into the jitted code. This is potentially invalid
+    if the code object for the function is re-assigned.
+
     Args:
-        name: The name being looked up. This should be an ordinary Python object retrieved from the
+        name: The name being looked up. This should be a PyObject* retrieved from the
             co_names tuple of the code object that is being jit compiled.
     """
-    # TODO(mpage): Error handling
     POP(rdi)
     MOV(rsi, id(name))
     MOV(rdx, pysym(b'PyObject_GetAttr'))
     PUSH(rdi)
     CALL(rdx)
+    # TODO(mpage): Error handling
     POP(rdi)
     decref(rdi, rsi)
     PUSH(rax)
 
+
+def store_attr(name):
+    """Call PyObject_SetAttr(<tos>, <name>, <tos + 1>)
+
+    NB: This embeds a pointer to the constant into the jitted code. This is potentially invalid
+    if the code object for the function is re-assigned.
+
+    Args:
+        name: The name of the attribute being set. This should be a PyObject* retrieved from
+            the co_names tuple of the code object being compiled.
+    """
+    MOV(rdi, [rsp])
+    MOV(rdx, [rsp + 8])
+    MOV(rsi, id(name))
+    MOV(rcx, pysym(b'PyObject_SetAttr'))
+    CALL(rcx)
+    # TODO(mpage): Error handling
+    # Dispose of owner and value
+    POP(rdi)
+    decref(rdi, rsi)
+    POP(rdi)
+    decref(rdi, rsi)
 
 def unary_not():
     # TODO(mpage): Error handling around call to PyObject_IsTrue
@@ -217,6 +242,7 @@ _SUPPORTED_INSTRUCTIONS = {
     ir.LoadAttr,
     ir.Load,
     ir.ReturnValue,
+    ir.StoreAttr,
     ir.UnaryOperation,
 }
 
@@ -253,6 +279,8 @@ def compile(func):
                     unary_not()
                 elif isinstance(instr, ir.ConditionalBranch):
                     conditional_branch(instr, labels)
+                elif isinstance(instr, ir.StoreAttr):
+                    store_attr(code.co_names[instr.index])
     encoded = ppfunc.finalize(abi.detect()).encode()
     loaded = encoded.load()
     return JitFunction(loaded, loaded.loader.code_address)

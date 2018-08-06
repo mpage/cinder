@@ -14,6 +14,11 @@ def get_bar(x):
     return x.bar
 
 
+def set_bar(x, v):
+    x.bar = v
+    return x
+
+
 def invert(x):
     return not x
 
@@ -81,3 +86,10 @@ def test_jump_if_false():
 def test_load_const():
     test = jit.compile(load_const)
     assert test() == 100
+
+
+def test_store_attr():
+    test = jit.compile(set_bar)
+    foo = Foo(None)
+    test(foo, 'testing 123')
+    assert foo.bar == 'testing 123'
