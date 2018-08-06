@@ -55,6 +55,10 @@ def load_global():
     return bar
 
 
+def do_call(f):
+    return f(1)
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -149,6 +153,13 @@ bb0:
 bb0:
   LOAD_GLOBAL 0
   RETURN_VALUE"""),
+
+    (do_call, """entry:
+bb0:
+  LOAD 0 LOCALS
+  LOAD 1 CONSTANTS
+  CALL 1
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
@@ -167,6 +178,7 @@ def test_disassemble(function, expected_ir):
     while_loop,
     store_attr,
     load_global,
+    do_call,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code

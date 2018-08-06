@@ -119,6 +119,14 @@ class PopTop(Instruction):
     pass
 
 
+class Call(Instruction):
+    def __init__(self, num_args: int) -> None:
+        self.num_args = num_args
+
+    def __str__(self) -> str:
+        return f'CALL {self.num_args}'
+
+
 class Node:
     pass
 

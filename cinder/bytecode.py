@@ -308,7 +308,11 @@ class InstructionDecoder:
     def decode_load_global(self, instr: Instruction) -> ir.Instruction:
         return ir.LoadGlobal(instr.argument)
 
+    def decode_call(self, instr: Instruction) -> ir.Instruction:
+        return ir.Call(instr.argument)
+
     decoders = {
+        Opcode.CALL_FUNCTION: decode_call,
         Opcode.JUMP_ABSOLUTE: decode_branch,
         Opcode.JUMP_IF_TRUE_OR_POP: decode_cond_branch,
         Opcode.JUMP_IF_FALSE_OR_POP: decode_cond_branch,
@@ -412,6 +416,8 @@ class InstructionEncoder:
             return Instruction(0, Opcode.STORE_ATTR, instr.index)
         elif isinstance(instr, ir.LoadGlobal):
             return Instruction(0, Opcode.LOAD_GLOBAL, instr.index)
+        elif isinstance(instr, ir.Call):
+            return Instruction(0, Opcode.CALL_FUNCTION, instr.num_args)
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:
