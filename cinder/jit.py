@@ -49,6 +49,21 @@ def decref(pyobj, temp, amount=1):
     MOV([pyobj], temp)
 
 
+def load_const(code, index):
+    """Load a reference to const onto the stack.
+
+    NB: This embeds a pointer to the constant into the jitted code. This is potentially invalid
+    if the code object for the function is re-assigned.
+
+    Args:
+        code: The code object
+        index: An index into the constants tuple of the code object
+    """
+    MOV(rdi, id(code.co_consts[index]))
+    incref(rdi, rsi)
+    PUSH(rdi)
+
+
 def load_fast(args, index):
     # TODO(mpage): Error handling
     MOV(rdi, [args + index * 8])
@@ -218,6 +233,8 @@ def compile(func):
                 if isinstance(instr, ir.Load):
                     if instr.pool == ir.VarPool.LOCALS:
                         load_fast(r12, instr.index)
+                    elif instr.pool == ir.VarPool.CONSTANTS:
+                        load_const(code, instr.index)
                     else:
                         raise ValueError('Can only load arguments')
                 elif isinstance(instr, ir.LoadAttr):

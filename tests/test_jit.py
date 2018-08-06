@@ -32,6 +32,10 @@ def jump_if_false(x, y):
     return x and y
 
 
+def load_const():
+    return 100
+
+
 def test_load_fast_and_return_value():
     foo = jit.compile(identity)
     assert foo(100) == 100
@@ -72,3 +76,8 @@ def test_jump_if_false():
     assert test(True, 1) == 1
     assert test(0, 'foo') == 0
     assert test(1, 'bar') == 'bar'
+
+
+def test_load_const():
+    test = jit.compile(load_const)
+    assert test() == 100
