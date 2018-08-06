@@ -71,6 +71,12 @@ def load_fast(args, index):
     PUSH(rdi)
 
 
+def pop_top():
+    """Discard the top-most element on the stack"""
+    POP(rdi)
+    decref(rdi, rsi)
+
+
 def load_attr(name):
     """Call PyObject_GetAttr(<tos>, name) and push the result.
 

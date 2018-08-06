@@ -99,6 +99,10 @@ class UnaryOperation(Instruction):
         return f'UNARY_OP {self.kind.name}'
 
 
+class PopTop(Instruction):
+    pass
+
+
 class Node:
     pass
 

@@ -299,6 +299,9 @@ class InstructionDecoder:
     def decode_branch(self, instr: Instruction) -> ir.Instruction:
         return ir.Branch(self.labels[instr.argument])
 
+    def decode_pop_top(self, instr: Instruction) -> ir.Instruction:
+        return ir.PopTop()
+
     decoders = {
         Opcode.JUMP_ABSOLUTE: decode_branch,
         Opcode.JUMP_IF_TRUE_OR_POP: decode_cond_branch,
@@ -307,6 +310,7 @@ class InstructionDecoder:
         Opcode.LOAD_CONST: decode_load,
         Opcode.LOAD_FAST: decode_load,
         Opcode.POP_JUMP_IF_FALSE: decode_cond_branch,
+        Opcode.POP_TOP: decode_pop_top,
         Opcode.RETURN_VALUE: decode_return,
         Opcode.STORE_FAST: decode_store,
         Opcode.UNARY_NOT: decode_unary_operation,
@@ -394,6 +398,8 @@ class InstructionEncoder:
             return Instruction(0, Opcode.STORE_FAST, instr.index)
         elif isinstance(instr, ir.Branch):
             return Instruction(0, Opcode.JUMP_ABSOLUTE, self.offsets[instr.target])
+        elif isinstance(instr, ir.PopTop):
+            return Instruction(0, Opcode.POP_TOP, 0)
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:
