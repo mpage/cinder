@@ -46,6 +46,11 @@ def while_loop(x):
     return x
 
 
+def store_attr(x, v):
+    x.foo = v
+    return x
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -127,6 +132,14 @@ bb2:
 bb3:
   LOAD 0 LOCALS
   RETURN_VALUE"""),
+
+    (store_attr, """entry:
+bb0:
+  LOAD 1 LOCALS
+  LOAD 0 LOCALS
+  STORE_ATTR 0
+  LOAD 0 LOCALS
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
@@ -143,6 +156,7 @@ def test_disassemble(function, expected_ir):
     two_way_cond,
     store_local,
     while_loop,
+    store_attr,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code
