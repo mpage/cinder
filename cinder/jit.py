@@ -1,5 +1,5 @@
 import ctypes
-import types
+import types as pytypes
 
 from cinder import (
     bytecode,
@@ -119,6 +119,28 @@ def store_attr(name):
     decref(rdi, rsi)
     POP(rdi)
     decref(rdi, rsi)
+
+
+def load_global(globals, builtins, name):
+    """Implement global lookup for functions whose globals and builtins are dictionaries.
+
+    NB: This directly embeds pointers to globals and builtins, so the jitted code will need
+    to be invalidated if either change
+
+    Args:
+        name: The name of the global being looked up
+        globals: The globals dictionary
+        builtins: The builtins dictionary
+    """
+    MOV(rdi, id(globals))
+    MOV(rsi, id(builtins))
+    MOV(rdx, id(name))
+    MOV(rcx, pysym(b'_PyDict_LoadGlobal'))
+    CALL(rcx)
+    # TODO(mpage): Error handling
+    incref(rax, rdi)
+    PUSH(rax)
+
 
 def unary_not():
     # TODO(mpage): Error handling around call to PyObject_IsTrue
@@ -240,6 +262,7 @@ def return_value():
 _SUPPORTED_INSTRUCTIONS = {
     ir.ConditionalBranch,
     ir.LoadAttr,
+    ir.LoadGlobal,
     ir.Load,
     ir.ReturnValue,
     ir.StoreAttr,
@@ -268,7 +291,7 @@ def compile(func):
                     elif instr.pool == ir.VarPool.CONSTANTS:
                         load_const(code, instr.index)
                     else:
-                        raise ValueError('Can only load arguments')
+                        raise ValueError('Can only load arguments or constants')
                 elif isinstance(instr, ir.LoadAttr):
                     load_attr(code.co_names[instr.index])
                 elif isinstance(instr, ir.ReturnValue):
@@ -281,6 +304,18 @@ def compile(func):
                     conditional_branch(instr, labels)
                 elif isinstance(instr, ir.StoreAttr):
                     store_attr(code.co_names[instr.index])
+                elif isinstance(instr, ir.LoadGlobal):
+                    globals = getattr(func, '__globals__', None)
+                    if globals.__class__ is not dict:
+                        raise ValueError('Cannot compile functions whose globals are not a dictionary')
+                    builtins = globals.get('__builtins__', None)
+                    if isinstance(builtins, dict):
+                        pass
+                    elif isinstance(builtins, pytypes.ModuleType):
+                        builtins = maybe_builtins.__dict__
+                    else:
+                        raise ValueError(f'Cannot compile functions whose builtins are not a module or dictionary')
+                    load_global(globals, builtins, code.co_names[instr.index])
     encoded = ppfunc.finalize(abi.detect()).encode()
     loaded = encoded.load()
     return JitFunction(loaded, loaded.loader.code_address)

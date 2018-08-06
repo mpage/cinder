@@ -41,6 +41,13 @@ def load_const():
     return 100
 
 
+my_global = 'testing 123'
+
+
+def load_global():
+    return my_global
+
+
 def test_load_fast_and_return_value():
     foo = jit.compile(identity)
     assert foo(100) == 100
@@ -93,3 +100,8 @@ def test_store_attr():
     foo = Foo(None)
     test(foo, 'testing 123')
     assert foo.bar == 'testing 123'
+
+
+def test_load_global():
+    test = jit.compile(load_global)
+    assert test() == 'testing 123'
