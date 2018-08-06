@@ -7,20 +7,40 @@ from cinder import (
     JitFunction,
 )
 from ctypes import pythonapi
+from ctypes.util import find_library
 from peachpy import *
 from peachpy.x86_64 import *
 from peachpy.x86_64.registers import rsp
 from typing import Tuple
 
+_cinder_name = find_library('_cinder')
+_cinder = ctypes.CDLL(_cinder_name)
+
+
 dllib = ctypes.CDLL(None)
 dllib.dlsym.restype = ctypes.c_void_p
-
-# Caller saved registers: r10, r11, parameter passing regs (rdi, rsi, rdx, rcx, r8, r9)
-# Callee saved registers: rbx, rbp, rsp (implicitly), r12 - r15,
 
 
 def pysym(name):
     return dllib.dlsym(pythonapi._handle, name)
+
+
+class Runtime:
+    PY_SYMBOLS = (
+        '_PyDict_LoadGlobal',
+        'PyObject_GetAttr',
+        'PyObject_IsTrue',
+        'PyObject_SetAttr',
+    )
+
+
+for name in Runtime.PY_SYMBOLS:
+    symbol = pysym(name.encode())
+    setattr(Runtime, name, symbol)
+
+
+# Caller saved registers: r10, r11, parameter passing regs (rdi, rsi, rdx, rcx, r8, r9)
+# Callee saved registers: rbx, rbp, rsp (implicitly), r12 - r15,
 
 
 def incref(pyobj, temp, amount=1):
@@ -89,7 +109,7 @@ def load_attr(name):
     """
     POP(rdi)
     MOV(rsi, id(name))
-    MOV(rdx, pysym(b'PyObject_GetAttr'))
+    MOV(rdx, Runtime.PyObject_GetAttr)
     PUSH(rdi)
     CALL(rdx)
     # TODO(mpage): Error handling
@@ -111,7 +131,7 @@ def store_attr(name):
     MOV(rdi, [rsp])
     MOV(rdx, [rsp + 8])
     MOV(rsi, id(name))
-    MOV(rcx, pysym(b'PyObject_SetAttr'))
+    MOV(rcx, Runtime.PyObject_SetAttr)
     CALL(rcx)
     # TODO(mpage): Error handling
     # Dispose of owner and value
@@ -135,7 +155,7 @@ def load_global(globals, builtins, name):
     MOV(rdi, id(globals))
     MOV(rsi, id(builtins))
     MOV(rdx, id(name))
-    MOV(rcx, pysym(b'_PyDict_LoadGlobal'))
+    MOV(rcx, Runtime._PyDict_LoadGlobal)
     CALL(rcx)
     # TODO(mpage): Error handling
     incref(rax, rdi)
@@ -148,7 +168,7 @@ def unary_not():
     done_label = Label()
     POP(r13)
     MOV(rdi, r13)
-    MOV(rdx, pysym(b'PyObject_IsTrue'))
+    MOV(rdx, Runtime.PyObject_IsTrue)
     CALL(rdx)
     decref(r13, r14)
     CMP(rax, 0)
@@ -182,7 +202,7 @@ def conditional_branch(instr, labels):
             JE(do_branch)
             # Call PyObject_IsTrue(TOS)
             MOV(rdi, r13)
-            MOV(rsi, pysym(b'PyObject_IsTrue'))
+            MOV(rsi, Runtime.PyObject_IsTrue)
             CALL(rsi)
             CMP(rax, 0)
             JE(fall_through)
@@ -202,7 +222,7 @@ def conditional_branch(instr, labels):
             JE(do_branch)
             # Call PyObject_IsTrue(TOS)
             MOV(rdi, r13)
-            MOV(rsi, pysym(b'PyObject_IsTrue'))
+            MOV(rsi, Runtime.PyObject_IsTrue)
             CALL(rsi)
             CMP(rax, 0)
             JG(fall_through)
@@ -223,7 +243,7 @@ def conditional_branch(instr, labels):
             JE(labels[instr.true_branch])
             # Call PyObject_IsTrue(TOS)
             MOV(rdi, r13)
-            MOV(rsi, pysym(b'PyObject_IsTrue'))
+            MOV(rsi, Runtime.PyObject_IsTrue)
             CALL(rsi)
             # TOS is truthy, jump
             CMP(rax, 0)
@@ -241,7 +261,7 @@ def conditional_branch(instr, labels):
             JE(labels[instr.false_branch])
             # Call PyObject_IsTrue(TOS)
             MOV(rdi, r13)
-            MOV(rsi, pysym(b'PyObject_IsTrue'))
+            MOV(rsi, Runtime.PyObject_IsTrue)
             CALL(rsi)
             # TOS is falsey, jump
             CMP(rax, 0)
