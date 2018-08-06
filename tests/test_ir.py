@@ -51,6 +51,10 @@ def store_attr(x, v):
     return x
 
 
+def load_global():
+    return bar
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -140,6 +144,11 @@ bb0:
   STORE_ATTR 0
   LOAD 0 LOCALS
   RETURN_VALUE"""),
+
+    (load_global, """entry:
+bb0:
+  LOAD_GLOBAL 0
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
@@ -157,6 +166,7 @@ def test_disassemble(function, expected_ir):
     store_local,
     while_loop,
     store_attr,
+    load_global,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code

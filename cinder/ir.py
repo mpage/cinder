@@ -87,6 +87,14 @@ class LoadAttr(Instruction):
         return f'LOAD_ATTR {self.index}'
 
 
+class LoadGlobal(Instruction):
+    def __init__(self, index: int) -> None:
+        self.index = index
+
+    def __str__(self) -> str:
+        return f'LOAD_GLOBAL {self.index}'
+
+
 class StoreAttr(Instruction):
     def __init__(self, index: int) -> None:
         self.index = index
