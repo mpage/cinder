@@ -23,6 +23,7 @@ dllib.dlsym.restype = ctypes.c_void_p
 
 
 def pysym(name):
+    """Look up a symbol exposed by CPython"""
     return dllib.dlsym(pythonapi._handle, name)
 
 
@@ -42,9 +43,45 @@ for name in Runtime.PY_SYMBOLS:
 # Initialize pointers from cinder
 Runtime.call_function = _cinder.get_call_function_address()
 
+# Calling convention and stack-frame layout for jit-compiled functions
+#
+# Jit functions take a single argument, a PyObject**, that points to the beginning of
+# the argument list. This matches CPythons fast calling convention.
+#
+# The following registers are initialized in the function prologue and must remain fixed
+# for the lifetime of the function:
+#
+#   r12 - Holds a pointer to the function's arguments
+#   rbp - Holds a pointer to the beginning of the local variable storage
+#
+# Immediate after the function prologue completes, the stack looks like
+#
+# +------------------------------------+ Frame (fixed size)
+# | Saved r12                          |
+# | Saved rbp                          |
+# |+----------------+ Local variables  | <--- rbp
+# ||Local 0         |                  |
+# ||...             |                  |
+# ||Local N         |                  |
+# |+----------------+                  |
+# +------------------------------------+
+# .                                    .
+# .  Value stack      | Growth         .
+# .  (the stack)      v                .
+# .                                    .
+# +....................................+
 
 # Caller saved registers: r10, r11, parameter passing regs (rdi, rsi, rdx, rcx, r8, r9)
 # Callee saved registers: rbx, rbp, rsp (implicitly), r12 - r15,
+
+def prologue(args, num_locals):
+    LOAD.ARGUMENT(r12, args)
+    MOV(rbp, rsp)
+    SUB(rsp, num_locals * 8)
+
+
+def epilogue():
+    MOV(rsp, rbp)
 
 
 def incref(pyobj, temp, amount=1):
@@ -131,11 +168,28 @@ def load_const(code, index):
     PUSH(rdi)
 
 
-def load_fast(args, index):
+def load_arg(index):
     # TODO(mpage): Error handling
-    MOV(rdi, [args + index * 8])
+    MOV(rdi, [r12 + index * 8])
     incref(rdi, rsi)
     PUSH(rdi)
+
+
+def store_arg(index):
+    POP(rdi)
+    MOV([r12 + index * 8], rdi)
+
+
+def load_local(index):
+    # TODO(mpage): Error handling
+    MOV(rdi, [rbp - (index + 1) * 8])
+    incref(rdi, rsi)
+    PUSH(rdi)
+
+
+def store_local(index):
+    POP(rdi)
+    MOV([rbp - (index + 1) * 8], rdi)
 
 
 def pop_top():
@@ -323,6 +377,7 @@ def return_value():
     # Top of stack contains PyObject*
     # TODO(mpage): Decref any remaining items on the stack
     POP(rax)
+    epilogue()
     RETURN(rax)
 
 
@@ -333,6 +388,7 @@ _SUPPORTED_INSTRUCTIONS = {
     ir.LoadGlobal,
     ir.Load,
     ir.ReturnValue,
+    ir.Store,
     ir.StoreAttr,
     ir.UnaryOperation,
 }
@@ -348,18 +404,29 @@ def compile(func):
                 raise ValueError(f'Cannot compile {instr}')
     args = Argument(ptr())
     with Function(func.__name__, (args,), uint64_t) as ppfunc:
-        LOAD.ARGUMENT(r12, args)
+        num_locals = code.co_nlocals - code.co_argcount
+        prologue(args, num_locals)
         labels = {block.label: Label() for block in blocks}
         for block in blocks:
             LABEL(labels[block.label])
             for instr in block.instructions:
                 if isinstance(instr, ir.Load):
                     if instr.pool == ir.VarPool.LOCALS:
-                        load_fast(r12, instr.index)
+                        index = instr.index
+                        if index < code.co_argcount:
+                            load_arg(index)
+                        else:
+                            load_local(index - code.co_argcount)
                     elif instr.pool == ir.VarPool.CONSTANTS:
                         load_const(code, instr.index)
                     else:
                         raise ValueError('Can only load arguments or constants')
+                elif isinstance(instr, ir.Store):
+                    if instr.index < code.co_argcount:
+                        store_arg(instr.index)
+                    else:
+                        print("Store local")
+                        store_local(instr.index - code.co_argcount)
                 elif isinstance(instr, ir.LoadAttr):
                     load_attr(code.co_names[instr.index])
                 elif isinstance(instr, ir.ReturnValue):
@@ -387,5 +454,6 @@ def compile(func):
                 elif isinstance(instr, ir.Call):
                     call_function(instr.num_args)
     encoded = ppfunc.finalize(abi.detect()).encode()
+    print(encoded.format_code())
     loaded = encoded.load()
     return JitFunction(loaded, loaded.loader.code_address)

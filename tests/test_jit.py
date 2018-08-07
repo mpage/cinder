@@ -64,6 +64,12 @@ def get_third(x, y, z):
     return z
 
 
+def store_local(x):
+    y = x
+    z = x
+    return y
+
+
 def test_load_fast_and_return_value():
     foo = jit.compile(identity)
     assert foo(100) == 100
@@ -132,3 +138,8 @@ def test_call():
 
     test_call3 = jit.compile(call3)
     assert test_call3(get_third, 1, 2, 3) == 3
+
+
+def test_store():
+    test = jit.compile(store_local)
+    assert test(10) == 10
