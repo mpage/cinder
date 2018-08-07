@@ -3422,6 +3422,11 @@ Error:
 
 extern PyTypeObject JitFunctionType;
 
+void*
+get_call_function_address() {
+  return &call_function;
+}
+
 static PyObject *
 call_function(PyObject ***pp_stack, Py_ssize_t oparg, PyObject *kwnames)
 {
@@ -3431,7 +3436,6 @@ call_function(PyObject ***pp_stack, Py_ssize_t oparg, PyObject *kwnames)
     Py_ssize_t nkwargs = (kwnames == NULL) ? 0 : PyTuple_GET_SIZE(kwnames);
     Py_ssize_t nargs = oparg - nkwargs;
     PyObject **stack;
-
 
     /* Always dispatch PyCFunction first, because these are
        presumed to be the most frequent callable object.
@@ -3565,6 +3569,7 @@ fast_function(PyObject *func, PyObject **stack,
     closure = PyFunction_GET_CLOSURE(func);
     name = ((PyFunctionObject *)func) -> func_name;
     qualname = ((PyFunctionObject *)func) -> func_qualname;
+
 
     if (argdefs != NULL) {
         d = &PyTuple_GET_ITEM(argdefs, 0);

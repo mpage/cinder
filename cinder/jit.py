@@ -15,6 +15,7 @@ from typing import Tuple
 
 _cinder_name = find_library('_cinder')
 _cinder = ctypes.CDLL(_cinder_name)
+_cinder.get_call_function_address.restype = ctypes.c_void_p
 
 
 dllib = ctypes.CDLL(None)
@@ -33,10 +34,13 @@ class Runtime:
         'PyObject_SetAttr',
     )
 
-
+# Initialize pointers from libpython
 for name in Runtime.PY_SYMBOLS:
     symbol = pysym(name.encode())
     setattr(Runtime, name, symbol)
+
+# Initialize pointers from cinder
+Runtime.call_function = _cinder.get_call_function_address()
 
 
 # Caller saved registers: r10, r11, parameter passing regs (rdi, rsi, rdx, rcx, r8, r9)
@@ -67,6 +71,49 @@ def decref(pyobj, temp, amount=1):
     MOV(temp, [pyobj])
     LEA(temp, [temp - amount])
     MOV([pyobj], temp)
+
+
+def duplicate_and_reverse(num_items):
+    """Duplicate the top <num_items> items on the stack, but in reverse order"""
+    reverse_args = Label()
+    reverse_done = Label()
+    MOV(rdi, rsp)
+    LEA(rsi, [rdi + num_items * 8])
+    LABEL(reverse_args)
+    CMP(rdi, rsi)
+    JE(reverse_done)
+    MOV(rdx, [rdi])
+    PUSH(rdx)
+    LEA(rdi, [rdi + 8])
+    JMP(reverse_args)
+    LABEL(reverse_done)
+
+
+def call_function(num_args):
+    """Perform the equivalent of CALL_FUNCTION"""
+    # This is heinous. CPython's stack grows in the opposite direction of the
+    # machine's stack so we are forced to reverse the order of the arguments
+    # and function on the stack before calling into the runtime. Obviously we
+    # need to fix this.
+    num_items = num_args + 1
+    duplicate_and_reverse(num_items)
+    # call_function takes a PyObject*** to the TOS
+    LEA(rdi, [rsp + num_items * 8])
+    PUSH(rdi)
+    # Call call_function
+    MOV(rdi, rsp)
+    MOV(rsi, num_args)
+    MOV(rdx, 0)
+    MOV(rcx, Runtime.call_function)
+    CALL(rcx)
+    # call_function takes care of decrementing refcounts on the arguments and
+    # function.
+    #
+    # pop the temporary stack pointer, the arguments, and the function (and their duplicates)
+    # from the stack
+    num_items = 1 + num_items * 2
+    LEA(rsp, [rsp + num_items * 8])
+    PUSH(rax)
 
 
 def load_const(code, index):
@@ -280,6 +327,7 @@ def return_value():
 
 
 _SUPPORTED_INSTRUCTIONS = {
+    ir.Call,
     ir.ConditionalBranch,
     ir.LoadAttr,
     ir.LoadGlobal,
@@ -336,6 +384,8 @@ def compile(func):
                     else:
                         raise ValueError(f'Cannot compile functions whose builtins are not a module or dictionary')
                     load_global(globals, builtins, code.co_names[instr.index])
+                elif isinstance(instr, ir.Call):
+                    call_function(instr.num_args)
     encoded = ppfunc.finalize(abi.detect()).encode()
     loaded = encoded.load()
     return JitFunction(loaded, loaded.loader.code_address)

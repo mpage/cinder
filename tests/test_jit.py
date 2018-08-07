@@ -48,6 +48,22 @@ def load_global():
     return my_global
 
 
+def call0(f):
+    return f()
+
+
+def call1(f, arg):
+    return f(arg)
+
+
+def call3(f, arg, arg1, arg2):
+    return f(arg, arg1, arg2)
+
+
+def get_third(x, y, z):
+    return z
+
+
 def test_load_fast_and_return_value():
     foo = jit.compile(identity)
     assert foo(100) == 100
@@ -105,3 +121,14 @@ def test_store_attr():
 def test_load_global():
     test = jit.compile(load_global)
     assert test() == 'testing 123'
+
+
+def test_call():
+    test_call0 = jit.compile(call0)
+    assert test_call0(load_const) == 100
+
+    test_call1 = jit.compile(call1)
+    assert test_call1(identity, 'testing') == 'testing'
+
+    test_call3 = jit.compile(call3)
+    assert test_call3(get_third, 1, 2, 3) == 3
