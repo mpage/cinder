@@ -70,6 +70,12 @@ def store_local(x):
     return y
 
 
+def while_loop(x, y):
+    while x:
+        x = y
+    return y
+
+
 def test_load_fast_and_return_value():
     foo = jit.compile(identity)
     assert foo(100) == 100
@@ -143,3 +149,8 @@ def test_call():
 def test_store():
     test = jit.compile(store_local)
     assert test(10) == 10
+
+
+def test_while_loop():
+    test = jit.compile(while_loop)
+    assert test(True, 0) == 0

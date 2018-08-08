@@ -46,42 +46,80 @@ Runtime.call_function = _cinder.get_call_function_address()
 # Calling convention and stack-frame layout for jit-compiled functions
 #
 # Jit functions take a single argument, a PyObject**, that points to the beginning of
-# the argument list. This matches CPythons fast calling convention.
+# the argument list. This matches CPython's fast calling convention.
 #
 # The following registers are initialized in the function prologue and must remain fixed
 # for the lifetime of the function:
 #
 #   r12 - Holds a pointer to the function's arguments
+#   r13 - Holds a pointer to the top of the block stack
 #   rbp - Holds a pointer to the beginning of the local variable storage
 #
-# Immediate after the function prologue completes, the stack looks like
+# Immediately after the function prologue completes, the stack looks like
 #
 # +------------------------------------+ Frame (fixed size)
 # | Saved r12                          |
+# | Saved r13                          |
 # | Saved rbp                          |
 # |+----------------+ Local variables  | <--- rbp
 # ||Local 0         |                  |
 # ||...             |                  |
 # ||Local N         |                  |
 # |+----------------+                  |
+# |+----------------+                  | <--- r13 (moves)
+# ||Block stack     |                  |
+# ||     | Growth   |                  |
+# ||     v          |                  |
+# |+----------------+                  |
 # +------------------------------------+
 # .                                    .
 # .  Value stack      | Growth         .
-# .  (the stack)      v                .
+# .  (the C stack)    v                .
 # .                                    .
 # +....................................+
 
 # Caller saved registers: r10, r11, parameter passing regs (rdi, rsi, rdx, rcx, r8, r9)
 # Callee saved registers: rbx, rbp, rsp (implicitly), r12 - r15,
 
+# TODO(mpage): Calculate this by scanning the bytecode for instructions that push onto the blockstack
+BLOCKSTACK_SIZE = 20
+
+
 def prologue(args, num_locals):
     LOAD.ARGUMENT(r12, args)
+    LEA(r13, [rsp - num_locals * 8])
     MOV(rbp, rsp)
-    SUB(rsp, num_locals * 8)
+    frame_size = (num_locals + BLOCKSTACK_SIZE) * 8
+    SUB(rsp, frame_size)
 
 
 def epilogue():
+    # TODO(mpage): Decref any remaining items on the stack
     MOV(rsp, rbp)
+
+
+def push_blockstack_entry():
+    SUB(r13, 8)
+    MOV([r13], rsp)
+
+
+def pop_blockstack_entry(reg):
+    """Pop an entry from the blockstack and store it in the register reg"""
+    MOV(reg, [r13])
+    ADD(r13, 8)
+
+
+def pop_stack_until(target):
+    """Pop and decref entries from the stack until the stack pointer reaches the target"""
+    done = Label()
+    loop = Label()
+    LABEL(loop)
+    CMP(rsp, target)
+    JE(done)
+    POP(rdi)
+    decref(rdi, rsi)
+    JMP(loop)
+    LABEL(done)
 
 
 def incref(pyobj, temp, amount=1):
@@ -264,13 +302,13 @@ def load_global(globals, builtins, name):
 
 
 def unary_not():
-    # TODO(mpage): Error handling around call to PyObject_IsTrue
     false_label = Label()
     done_label = Label()
     POP(r13)
     MOV(rdi, r13)
     MOV(rdx, Runtime.PyObject_IsTrue)
     CALL(rdx)
+    # TODO(mpage): Error handling around call to PyObject_IsTrue
     decref(r13, r14)
     CMP(rax, 0)
     JNZ(false_label)
@@ -287,63 +325,63 @@ def unary_not():
 
 def conditional_branch(instr, labels):
     # TODO(mpage): Error handling
-    MOV(r14, id(True))
-    MOV(r15, id(False))
-    true, false = r14, r15
+    MOV(rdi, id(True))
+    MOV(rsi, id(False))
+    true, false = rdi, rsi
     fall_through = Label()
     do_branch = Label()
     if instr.pop_before_eval:
-        POP(r13)
+        POP(r14)
         if instr.jump_when_true:
             # TOS == Py_False?
-            CMP(r13, false)
+            CMP(r14, false)
             JE(fall_through)
             # TOS == Py_True?
-            CMP(r13, true)
+            CMP(r14, true)
             JE(do_branch)
             # Call PyObject_IsTrue(TOS)
-            MOV(rdi, r13)
+            MOV(rdi, r14)
             MOV(rsi, Runtime.PyObject_IsTrue)
             CALL(rsi)
             CMP(rax, 0)
             JE(fall_through)
             # TOS is truthy, do the branch
             LABEL(do_branch)
-            decref(r13, r14)
+            decref(r14, rdi)
             JMP(labels[instr.true_branch])
             # TOS is falsey, fall through
             LABEL(fall_through)
-            decref(r13, r14)
+            decref(r14, rdi)
         else:
             # TOS == Py_True?
-            CMP(r13, true)
+            CMP(r14, true)
             JE(fall_through)
             # TOS == Py_False?
-            CMP(r13, false)
+            CMP(r14, false)
             JE(do_branch)
             # Call PyObject_IsTrue(TOS)
-            MOV(rdi, r13)
+            MOV(rdi, r14)
             MOV(rsi, Runtime.PyObject_IsTrue)
             CALL(rsi)
             CMP(rax, 0)
             JG(fall_through)
             # TOS is truthy, do the branch
             LABEL(do_branch)
-            decref(r13, r14)
+            decref(r14, rdi)
             JMP(labels[instr.false_branch])
             # TOS is falsey, fall through
             LABEL(fall_through)
-            decref(r13, r14)
+            decref(r14, rdi)
     else:
-        MOV(r13, [rsp])
+        MOV(r14, [rsp])
         if instr.jump_when_true:
             # TOS == Py_False?
-            CMP(r13, false)
+            CMP(r14, false)
             JE(fall_through)
-            CMP(r13, true)
+            CMP(r14, true)
             JE(labels[instr.true_branch])
             # Call PyObject_IsTrue(TOS)
-            MOV(rdi, r13)
+            MOV(rdi, r14)
             MOV(rsi, Runtime.PyObject_IsTrue)
             CALL(rsi)
             # TOS is truthy, jump
@@ -351,17 +389,17 @@ def conditional_branch(instr, labels):
             JG(labels[instr.true_branch])
             # TOS is falsey, pop and fall through
             LABEL(fall_through)
-            decref(r13, r14)
+            decref(r14, rdi)
             ADD(rsp, 8)
         else:
             # TOS == Py_True?
-            CMP(r13, true)
+            CMP(r14, true)
             JE(fall_through)
-            CMP(r13, false)
+            CMP(r14, false)
             # TOS is false, jump
             JE(labels[instr.false_branch])
             # Call PyObject_IsTrue(TOS)
-            MOV(rdi, r13)
+            MOV(rdi, r14)
             MOV(rsi, Runtime.PyObject_IsTrue)
             CALL(rsi)
             # TOS is falsey, jump
@@ -369,19 +407,25 @@ def conditional_branch(instr, labels):
             JE(labels[instr.false_branch])
             # TOS is truthy, pop and fall through
             LABEL(fall_through)
-            decref(r13, r14)
+            decref(r14, rdi)
             ADD(rsp, 8)
+
+
+def pop_block():
+    """Equivalent to CPython's POP_BLOCK"""
+    pop_blockstack_entry(rcx)
+    pop_stack_until(rcx)
 
 
 def return_value():
     # Top of stack contains PyObject*
-    # TODO(mpage): Decref any remaining items on the stack
     POP(rax)
     epilogue()
     RETURN(rax)
 
 
 _SUPPORTED_INSTRUCTIONS = {
+    ir.Branch,
     ir.Call,
     ir.ConditionalBranch,
     ir.LoadAttr,
@@ -409,6 +453,10 @@ def compile(func):
         labels = {block.label: Label() for block in blocks}
         for block in blocks:
             LABEL(labels[block.label])
+            if block.is_loop_header:
+                push_blockstack_entry()
+            if block.is_loop_footer:
+                pop_block()
             for instr in block.instructions:
                 if isinstance(instr, ir.Load):
                     if instr.pool == ir.VarPool.LOCALS:
@@ -421,6 +469,8 @@ def compile(func):
                         load_const(code, instr.index)
                     else:
                         raise ValueError('Can only load arguments or constants')
+                elif isinstance(instr, ir.Branch):
+                    JMP(labels[instr.target])
                 elif isinstance(instr, ir.Store):
                     if instr.index < code.co_argcount:
                         store_arg(instr.index)
