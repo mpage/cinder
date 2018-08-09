@@ -128,8 +128,8 @@ class Call(Instruction):
 
 
 class ComparePredicate(enum.Enum):
-    IS = 8
-
+    IS     = 8
+    IS_NOT = 9
 
 class Compare(Instruction):
     def __init__(self, predicate: ComparePredicate) -> None:

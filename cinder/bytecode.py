@@ -327,6 +327,7 @@ class InstructionDecoder:
         _UNIMPLEMENTED,
         _UNIMPLEMENTED,
         ir.ComparePredicate.IS,
+        ir.ComparePredicate.IS_NOT,
     )
 
     def decode_compare(self, instr: Instruction) -> ir.Instruction:
