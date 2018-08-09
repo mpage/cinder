@@ -1,7 +1,5 @@
 # Must have
 
-- README
-- PeachPy dependency in Pipenv
 - Make JitFunction a non-data descriptor
 - Error handling
 - Refactor code generation into a class
