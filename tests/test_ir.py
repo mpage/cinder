@@ -75,6 +75,13 @@ def cmp_is_not(x, y):
     return x is not y
 
 
+def loop_with_setup(x, y):
+    x = y
+    while x:
+        pass
+    return x
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -208,6 +215,19 @@ bb0:
   LOAD 1 LOCALS
   COMPARE IS_NOT
   RETURN_VALUE"""),
+
+    (loop_with_setup, """entry:
+bb0:
+  LOAD 1 LOCALS
+  STORE 0
+bb1:
+  LOAD 0 LOCALS
+  COND_BRANCH true=bb2 false=bb3
+bb2:
+  BRANCH bb1
+bb3:
+  LOAD 0 LOCALS
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
@@ -229,6 +249,7 @@ def test_disassemble(function, expected_ir):
     jump_forward,
     cmp_is,
     cmp_is_not,
+    loop_with_setup,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code

@@ -402,6 +402,8 @@ def disassemble(code: bytes) -> ir.ControlFlowGraph:
         for instr in BytecodeIterator(code, start, end):
             if instr.opcode == Opcode.POP_BLOCK:
                 is_loop_footer = True
+            elif instr.opcode == Opcode.SETUP_LOOP:
+                pass
             else:
                 if start >= 2 and code[start - 2] == Opcode.SETUP_LOOP:
                     is_loop_header = True
