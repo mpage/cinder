@@ -5,6 +5,7 @@
 - Make JitFunction a non-data descriptor
 - Error handling
 - Refactor code generation into a class
+- Directory layout
 - Make temporary register have a default value for incref/decref
 
 # Nice to have
