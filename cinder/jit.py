@@ -538,7 +538,7 @@ def compile(func):
                     if isinstance(builtins, dict):
                         pass
                     elif isinstance(builtins, pytypes.ModuleType):
-                        builtins = maybe_builtins.__dict__
+                        builtins = builtins.__dict__
                     else:
                         raise ValueError(f'Cannot compile functions whose builtins are not a module or dictionary')
                     load_global(globals, builtins, code.co_names[instr.index])
