@@ -431,6 +431,26 @@ def compare_is():
     decref(rsi, rcx)
 
 
+def compare_is_not():
+    true = id(True)
+    false = id(False)
+    is_true = Label()
+    done = Label()
+    POP(rdi)
+    POP(rsi)
+    CMP(rdi, rsi)
+    JNE(is_true)
+    MOV(rdx, false)
+    JMP(done)
+    LABEL(is_true)
+    MOV(rdx, true)
+    LABEL(done)
+    incref(rdx, rcx)
+    PUSH(rdx)
+    decref(rdi, rcx)
+    decref(rsi, rcx)
+
+
 def pop_block():
     """Equivalent to CPython's POP_BLOCK"""
     pop_blockstack_entry(rcx)
@@ -526,6 +546,8 @@ def compile(func):
                 elif isinstance(instr, ir.Compare):
                     if instr.predicate == ir.ComparePredicate.IS:
                         compare_is()
+                    elif instr.predicate == ir.ComparePredicate.IS_NOT:
+                        compare_is_not()
                     else:
                         raise ValueError(f'Cannot compile functions with {instr.predicate.name} comparisons')
     encoded = ppfunc.finalize(abi.detect()).encode()

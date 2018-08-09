@@ -179,3 +179,12 @@ def test_is():
     test = jit.compile(cmp_is)
     assert test(1, 1) == True
     assert test(1, 2) == False
+
+
+def test_is_not():
+    def f(x, y):
+        return x is not y
+
+    test = jit.compile(f)
+    assert test(1, 1) == False
+    assert test(1, 2) == True
