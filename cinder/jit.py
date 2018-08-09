@@ -411,6 +411,26 @@ def conditional_branch(instr, labels):
             ADD(rsp, 8)
 
 
+def compare_is():
+    true = id(True)
+    false = id(False)
+    is_true = Label()
+    done = Label()
+    POP(rdi)
+    POP(rsi)
+    CMP(rdi, rsi)
+    JE(is_true)
+    MOV(rdx, false)
+    JMP(done)
+    LABEL(is_true)
+    MOV(rdx, true)
+    LABEL(done)
+    incref(rdx, rcx)
+    PUSH(rdx)
+    decref(rdi, rcx)
+    decref(rsi, rcx)
+
+
 def pop_block():
     """Equivalent to CPython's POP_BLOCK"""
     pop_blockstack_entry(rcx)
@@ -427,6 +447,7 @@ def return_value():
 _SUPPORTED_INSTRUCTIONS = {
     ir.Branch,
     ir.Call,
+    ir.Compare,
     ir.ConditionalBranch,
     ir.LoadAttr,
     ir.LoadGlobal,
@@ -475,7 +496,6 @@ def compile(func):
                     if instr.index < code.co_argcount:
                         store_arg(instr.index)
                     else:
-                        print("Store local")
                         store_local(instr.index - code.co_argcount)
                 elif isinstance(instr, ir.LoadAttr):
                     load_attr(code.co_names[instr.index])
@@ -503,7 +523,11 @@ def compile(func):
                     load_global(globals, builtins, code.co_names[instr.index])
                 elif isinstance(instr, ir.Call):
                     call_function(instr.num_args)
+                elif isinstance(instr, ir.Compare):
+                    if instr.predicate == ir.ComparePredicate.IS:
+                        compare_is()
+                    else:
+                        raise ValueError(f'Cannot compile functions with {instr.predicate.name} comparisons')
     encoded = ppfunc.finalize(abi.detect()).encode()
-    print(encoded.format_code())
     loaded = encoded.load()
     return JitFunction(loaded, loaded.loader.code_address)

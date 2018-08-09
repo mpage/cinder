@@ -84,6 +84,10 @@ def jump_forward(x, y, z):
         return 2
 
 
+def cmp_is(x, y):
+    return x is y
+
+
 def test_load_fast_and_return_value():
     foo = jit.compile(identity)
     assert foo(100) == 100
@@ -169,3 +173,9 @@ def test_jump_forward():
     assert test(True, True) == 1
     assert test(True, False) == None
     assert test(False, False) == 2
+
+
+def test_is():
+    test = jit.compile(cmp_is)
+    assert test(1, 1) == True
+    assert test(1, 2) == False
