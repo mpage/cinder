@@ -10,6 +10,10 @@ based on a Java version:
 """
 import argparse
 
+import cinder
+from cinder import jit
+import time
+
 # Task IDs
 I_IDLE = 1
 I_WORK = 2
@@ -367,8 +371,9 @@ def schedule():
             t = t.link
         else:
             if tracing:
-                trace(chr(ord("0") + t.ident))
-            t = t.runTask()
+                # trace(chr(ord("0") + t.ident))
+                pass
+            t = Task.runTask(t)
 
 
 class Richards(object):
@@ -417,14 +422,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--num-iters', default=1, type=int)
     parser.add_argument('--use-jit', action='store_true')
+    parser.add_argument('--report', action='store_true')
     args = parser.parse_args()
     richards = Richards()
     if args.use_jit:
-        import cinder
-        from cinder import jit
         cinder.install_interpreter()
         TaskState.isTaskHoldingOrWaiting = jit.compile(TaskState.isTaskHoldingOrWaiting)
         TaskState.isWaitingWithPacket = jit.compile(TaskState.isWaitingWithPacket)
+        Task.runTask = jit.compile(Task.runTask)
+        schedule = jit.compile(schedule)
+    start = time.time()
     richards.run(args.num_iters)
+    elapsed = time.time() - start
+    if args.report:
+        print(f'Took {elapsed}s')
     if args.use_jit:
         cinder.uninstall_interpreter()
