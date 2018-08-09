@@ -3,13 +3,9 @@
 ## Task.runTask
 
 COMPARE_OP -- specialize
-JUMP_ABSOLUTE -- need jit
-JUMP_FORWARD
+JUMP_FORWARD - jit support
 
 ## schedule
 
-SETUP_LOOP -- need jit
 COMPARE_OP -- specialize
-JUMP_ABSOLUTE -- need jit
 BINARY_ADD
-POP_BLOCK -- need jit

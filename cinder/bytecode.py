@@ -236,7 +236,7 @@ def compute_block_boundaries(code: bytes) -> List[Tuple[int, int]]:
         if opcode in BRANCH_OPCODES and next_instr_offset < last_offset:
             block_starts.add(next_instr_offset)
         if opcode in RELATIVE_BRANCH_OPCODES:
-            block_starts.add(instr.argument + instr.offset)
+            block_starts.add(next_instr_offset + instr.argument)
         elif opcode in ABSOLUTE_BRANCH_OPCODES:
             block_starts.add(instr.argument)
     sorted_block_starts = sorted(block_starts)
@@ -299,6 +299,9 @@ class InstructionDecoder:
     def decode_branch(self, instr: Instruction) -> ir.Instruction:
         return ir.Branch(self.labels[instr.argument])
 
+    def decode_jump_forward(self, instr: Instruction) -> ir.Instruction:
+        return ir.Branch(self.labels[instr.offset + INSTRUCTION_SIZE_B + instr.argument])
+
     def decode_pop_top(self, instr: Instruction) -> ir.Instruction:
         return ir.PopTop()
 
@@ -314,6 +317,7 @@ class InstructionDecoder:
     decoders = {
         Opcode.CALL_FUNCTION: decode_call,
         Opcode.JUMP_ABSOLUTE: decode_branch,
+        Opcode.JUMP_FORWARD: decode_jump_forward,
         Opcode.JUMP_IF_TRUE_OR_POP: decode_cond_branch,
         Opcode.JUMP_IF_FALSE_OR_POP: decode_cond_branch,
         Opcode.LOAD_ATTR: decode_load_attr,
@@ -395,7 +399,7 @@ class InstructionEncoder:
         """
         self.offsets = offsets
 
-    def encode(self, instr: ir.Instruction) -> Instruction:
+    def encode(self, instr: ir.Instruction, offset: int) -> Instruction:
         if isinstance(instr, ir.ReturnValue):
             return self.encode_return(instr)
         elif isinstance(instr, ir.ConditionalBranch):
@@ -409,6 +413,10 @@ class InstructionEncoder:
         elif isinstance(instr, ir.Store):
             return Instruction(0, Opcode.STORE_FAST, instr.index)
         elif isinstance(instr, ir.Branch):
+            dest_offset = self.offsets[instr.target]
+            delta = dest_offset - (offset + INSTRUCTION_SIZE_B)
+            if delta >= 0 and delta < 256:
+                return Instruction(0, Opcode.JUMP_FORWARD, delta)
             return Instruction(0, Opcode.JUMP_ABSOLUTE, self.offsets[instr.target])
         elif isinstance(instr, ir.PopTop):
             return Instruction(0, Opcode.POP_TOP, 0)
@@ -490,7 +498,7 @@ def assemble(cfg: ir.ControlFlowGraph) -> bytes:
             code[offset + 1] = 0
             offset += 2
         for ir_instr in block.instructions:
-            instr = encoder.encode(ir_instr)
+            instr = encoder.encode(ir_instr, offset)
             code[offset] = instr.opcode
             code[offset + 1] = instr.argument
             offset += 2

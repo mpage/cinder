@@ -59,6 +59,14 @@ def do_call(f):
     return f(1)
 
 
+def jump_forward(x, y, z):
+    if x:
+        if y:
+            z = 1
+    else:
+        z = 2
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -160,10 +168,27 @@ bb0:
   LOAD 1 CONSTANTS
   CALL 1
   RETURN_VALUE"""),
+
+    (jump_forward, """entry:
+bb0:
+  LOAD 0 LOCALS
+  COND_BRANCH true=bb1 false=bb3
+bb1:
+  LOAD 1 LOCALS
+  COND_BRANCH true=bb2 false=bb4
+bb2:
+  LOAD 1 CONSTANTS
+  STORE 2
+  BRANCH bb4
+bb3:
+  LOAD 2 CONSTANTS
+  STORE 2
+bb4:
+  LOAD 0 CONSTANTS
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
-    print(str(cfg))
     assert str(cfg) == expected_ir
 
 
@@ -179,6 +204,7 @@ def test_disassemble(function, expected_ir):
     store_attr,
     load_global,
     do_call,
+    jump_forward,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code
