@@ -357,21 +357,6 @@ class InstructionDecoder:
     }
 
 
-# Opcodes that we understand how to disassemble
-_DISASSEMBLED_OPCODES = {
-    Opcode.JUMP_ABSOLUTE,
-    Opcode.JUMP_IF_TRUE_OR_POP,
-    Opcode.JUMP_IF_FALSE_OR_POP,
-    Opcode.LOAD_ATTR,
-    Opcode.LOAD_CONST,
-    Opcode.LOAD_FAST,
-    Opcode.POP_JUMP_IF_FALSE,
-    Opcode.RETURN_VALUE,
-    Opcode.STORE_FAST,
-    Opcode.UNARY_NOT,
-}
-
-
 def is_block_setup(code: bytes, start: int, end: int) -> bool:
     return ((start + INSTRUCTION_SIZE_B == end) and
             (code[start] == Opcode.SETUP_LOOP))
