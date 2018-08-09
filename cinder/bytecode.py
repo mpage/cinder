@@ -317,22 +317,14 @@ class InstructionDecoder:
     def decode_call(self, instr: Instruction) -> ir.Instruction:
         return ir.Call(instr.argument)
 
-    COMPARE_PREDICATES = (
-        _UNIMPLEMENTED,
-        _UNIMPLEMENTED,
-        _UNIMPLEMENTED,
-        _UNIMPLEMENTED,
-        _UNIMPLEMENTED,
-        _UNIMPLEMENTED,
-        _UNIMPLEMENTED,
-        _UNIMPLEMENTED,
+    COMPARE_PREDICATES = {p.value: p for p in (
         ir.ComparePredicate.IS,
-        ir.ComparePredicate.IS_NOT,
-    )
+        ir.ComparePredicate.IS_NOT,)
+    }
 
     def decode_compare(self, instr: Instruction) -> ir.Instruction:
-        predicate = self.COMPARE_PREDICATES[instr.argument]
-        if predicate is _UNIMPLEMENTED:
+        predicate = self.COMPARE_PREDICATES.get(instr.argument, None)
+        if predicate is None:
             name = dis.cmp_op[instr.argument]
             raise ValueError(f"Cannot decode compare predicate {name}")
         return ir.Compare(predicate)
