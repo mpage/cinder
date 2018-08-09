@@ -406,7 +406,6 @@ def disassemble(code: bytes) -> ir.ControlFlowGraph:
                 if start >= 2 and code[start - 2] == Opcode.SETUP_LOOP:
                     is_loop_header = True
                 ir_instrs.append(decoder.decode(instr))
-                prev_instr = instr
         blocks.append(ir.BasicBlock(
             labels[start], ir_instrs, is_loop_header, is_loop_footer))
     return ir.build_initial_cfg(blocks)
