@@ -127,6 +127,18 @@ class Call(Instruction):
         return f'CALL {self.num_args}'
 
 
+class ComparePredicate(enum.Enum):
+    IS = 8
+
+
+class Compare(Instruction):
+    def __init__(self, predicate: ComparePredicate) -> None:
+        self.predicate = predicate
+
+    def __str__(self) -> str:
+        return f'COMPARE {self.predicate.name}'
+
+
 class Node:
     pass
 

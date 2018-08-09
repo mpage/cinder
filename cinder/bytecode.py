@@ -247,6 +247,9 @@ def compute_block_boundaries(code: bytes) -> List[Tuple[int, int]]:
     return boundaries
 
 
+_UNIMPLEMENTED = 'UNIMPLEMENTED'
+
+
 class InstructionDecoder:
     """Lifts bytecode instructions into ir instructions"""
 
@@ -314,8 +317,28 @@ class InstructionDecoder:
     def decode_call(self, instr: Instruction) -> ir.Instruction:
         return ir.Call(instr.argument)
 
+    COMPARE_PREDICATES = (
+        _UNIMPLEMENTED,
+        _UNIMPLEMENTED,
+        _UNIMPLEMENTED,
+        _UNIMPLEMENTED,
+        _UNIMPLEMENTED,
+        _UNIMPLEMENTED,
+        _UNIMPLEMENTED,
+        _UNIMPLEMENTED,
+        ir.ComparePredicate.IS,
+    )
+
+    def decode_compare(self, instr: Instruction) -> ir.Instruction:
+        predicate = self.COMPARE_PREDICATES[instr.argument]
+        if predicate is _UNIMPLEMENTED:
+            name = dis.cmp_op[instr.argument]
+            raise ValueError(f"Cannot decode compare predicate {name}")
+        return ir.Compare(predicate)
+
     decoders = {
         Opcode.CALL_FUNCTION: decode_call,
+        Opcode.COMPARE_OP: decode_compare,
         Opcode.JUMP_ABSOLUTE: decode_branch,
         Opcode.JUMP_FORWARD: decode_jump_forward,
         Opcode.JUMP_IF_TRUE_OR_POP: decode_cond_branch,
@@ -426,6 +449,8 @@ class InstructionEncoder:
             return Instruction(0, Opcode.LOAD_GLOBAL, instr.index)
         elif isinstance(instr, ir.Call):
             return Instruction(0, Opcode.CALL_FUNCTION, instr.num_args)
+        elif isinstance(instr, ir.Compare):
+            return Instruction(0, Opcode.COMPARE_OP, instr.predicate.value)
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:

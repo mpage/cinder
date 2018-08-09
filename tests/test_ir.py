@@ -67,6 +67,10 @@ def jump_forward(x, y, z):
         z = 2
 
 
+def cmp_is(x, y):
+    return x is y
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -186,6 +190,13 @@ bb3:
 bb4:
   LOAD 0 CONSTANTS
   RETURN_VALUE"""),
+
+    (cmp_is, """entry:
+bb0:
+  LOAD 0 LOCALS
+  LOAD 1 LOCALS
+  COMPARE IS
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = bytecode.disassemble(function.__code__.co_code)
@@ -205,6 +216,7 @@ def test_disassemble(function, expected_ir):
     load_global,
     do_call,
     jump_forward,
+    cmp_is,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code
