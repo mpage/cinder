@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 pytest = "*"
 pytest-runner = "*"
+peachpy = {git = "https://github.com/Maratyszcza/PeachPy"}
 
 [dev-packages]
 

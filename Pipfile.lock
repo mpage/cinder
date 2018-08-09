@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "40d82b26b2bf6c972a1d2456368196e03b76436777ae16da32df4697697c70c9"
+            "sha256": "63f41ce8e6755c2f89488e8c14255aaf161d97409644d9a1d4d1b6e5ed70dd66"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -37,6 +37,10 @@
                 "sha256:fcbfeaea0be121980e15bc97b3817b5202ca73d0eae185b4550cbfce2a3ebb3d"
             ],
             "version": "==4.3.0"
+        },
+        "peachpy": {
+            "git": "https://github.com/Maratyszcza/PeachPy",
+            "ref": "01d15157a973a4ae16b8046313ddab371ea582db"
         },
         "pluggy": {
             "hashes": [
