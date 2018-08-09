@@ -16,4 +16,5 @@ setup(name='cinder',
       packages=setuptools.find_packages(exclude=['tests*']),
       ext_modules=[_cinder],
       setup_requires=["pytest-runner"],
-      tests_require=["pytest"])
+      tests_require=["pytest"],
+      python_requires='>=3.6')
