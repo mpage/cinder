@@ -472,6 +472,7 @@ _SUPPORTED_INSTRUCTIONS = {
     ir.LoadAttr,
     ir.LoadGlobal,
     ir.Load,
+    ir.PopTop,
     ir.ReturnValue,
     ir.Store,
     ir.StoreAttr,
@@ -543,6 +544,8 @@ def compile(func):
                     load_global(globals, builtins, code.co_names[instr.index])
                 elif isinstance(instr, ir.Call):
                     call_function(instr.num_args)
+                elif isinstance(instr, ir.PopTop):
+                    pop_top()
                 elif isinstance(instr, ir.Compare):
                     if instr.predicate == ir.ComparePredicate.IS:
                         compare_is()
