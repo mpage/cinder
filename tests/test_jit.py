@@ -76,6 +76,14 @@ def while_loop(x, y):
     return y
 
 
+def jump_forward(x, y, z):
+    if x:
+        if y:
+            return 1
+    else:
+        return 2
+
+
 def test_load_fast_and_return_value():
     foo = jit.compile(identity)
     assert foo(100) == 100
@@ -154,3 +162,10 @@ def test_store():
 def test_while_loop():
     test = jit.compile(while_loop)
     assert test(True, 0) == 0
+
+
+def test_jump_forward():
+    test = jit.compile(jump_forward)
+    assert test(True, True) == 1
+    assert test(True, False) == None
+    assert test(False, False) == 2

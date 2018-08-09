@@ -3,7 +3,6 @@
 ## Task.runTask
 
 COMPARE_OP -- specialize
-JUMP_FORWARD - jit support
 
 ## schedule
 
