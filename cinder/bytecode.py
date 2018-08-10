@@ -178,9 +178,11 @@ INSTRUCTION_SIZE_B = 2
 
 
 class Instruction(NamedTuple):
-    offset: int
     opcode: Opcode
     argument: int
+
+
+Offset = int
 
 
 class BytecodeIterator:
@@ -199,7 +201,7 @@ class BytecodeIterator:
     def __iter__(self) -> 'BytecodeIterator':
         return self
 
-    def __next__(self) -> Instruction:
+    def __next__(self) -> Tuple[Offset, Instruction]:
         if self.offset >= self.end:
             raise StopIteration
         opcode = self.code[self.offset]
@@ -210,9 +212,10 @@ class BytecodeIterator:
                 self.extended_arg = arg << 8
             else:
                 self.extended_arg = 0
-        instr = Instruction(self.offset, Opcode(opcode), arg)
+        instr = Instruction(Opcode(opcode), arg)
+        offset = self.offset
         self.offset += INSTRUCTION_SIZE_B
-        return instr
+        return offset, instr
 
 
 def compute_block_boundaries(code: bytes) -> List[Tuple[int, int]]:
@@ -230,9 +233,9 @@ def compute_block_boundaries(code: bytes) -> List[Tuple[int, int]]:
         return []
     block_starts = {0}
     last_offset = len(code)
-    for instr in BytecodeIterator(code):
+    for offset, instr in BytecodeIterator(code):
         opcode = instr.opcode
-        next_instr_offset = instr.offset + INSTRUCTION_SIZE_B
+        next_instr_offset = offset + INSTRUCTION_SIZE_B
         if opcode in BRANCH_OPCODES and next_instr_offset < last_offset:
             block_starts.add(next_instr_offset)
         if opcode in RELATIVE_BRANCH_OPCODES:
@@ -261,13 +264,13 @@ class InstructionDecoder:
         """
         self.labels = labels
 
-    def decode(self, instr: Instruction) -> ir.Instruction:
+    def decode(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         decoder = self.decoders.get(instr.opcode, None)
         if decoder is None:
             raise ValueError(f'Cannot decode opcode {dis.opname[instr.opcode]}')
-        return decoder(self, instr)
+        return decoder(self, offset, instr)
 
-    def decode_return(self, instr: Instruction) -> ir.Instruction:
+    def decode_return(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.ReturnValue()
 
     LOAD_POOLS = {
@@ -275,12 +278,12 @@ class InstructionDecoder:
         Opcode.LOAD_FAST: ir.VarPool.LOCALS,
     }
 
-    def decode_load(self, instr: Instruction) -> ir.Instruction:
+    def decode_load(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.Load(instr.argument, self.LOAD_POOLS[instr.opcode])
 
-    def decode_cond_branch(self, instr: Instruction) -> ir.Instruction:
+    def decode_cond_branch(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         jump_br = self.labels[instr.argument]
-        pass_br = self.labels[instr.offset + INSTRUCTION_SIZE_B]
+        pass_br = self.labels[offset + INSTRUCTION_SIZE_B]
         if instr.opcode == Opcode.JUMP_IF_FALSE_OR_POP:
             return ir.ConditionalBranch(pass_br, jump_br, False, False)
         elif instr.opcode == Opcode.JUMP_IF_TRUE_OR_POP:
@@ -290,31 +293,31 @@ class InstructionDecoder:
         else:
             raise ValueError(f'Cannot decode {dis.opname[instr.opcode]}')
 
-    def decode_load_attr(self, instr: Instruction) -> ir.Instruction:
+    def decode_load_attr(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.LoadAttr(instr.argument)
 
-    def decode_unary_operation(self, instr: Instruction) -> ir.Instruction:
+    def decode_unary_operation(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.UnaryOperation(ir.UnaryOperationKind.NOT)
 
-    def decode_store(self, instr: Instruction) -> ir.Instruction:
+    def decode_store(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.Store(instr.argument)
 
-    def decode_branch(self, instr: Instruction) -> ir.Instruction:
+    def decode_branch(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.Branch(self.labels[instr.argument])
 
-    def decode_jump_forward(self, instr: Instruction) -> ir.Instruction:
-        return ir.Branch(self.labels[instr.offset + INSTRUCTION_SIZE_B + instr.argument])
+    def decode_jump_forward(self, offset: Offset, instr: Instruction) -> ir.Instruction:
+        return ir.Branch(self.labels[offset + INSTRUCTION_SIZE_B + instr.argument])
 
-    def decode_pop_top(self, instr: Instruction) -> ir.Instruction:
+    def decode_pop_top(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.PopTop()
 
-    def decode_store_attr(self, instr: Instruction) -> ir.Instruction:
+    def decode_store_attr(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.StoreAttr(instr.argument)
 
-    def decode_load_global(self, instr: Instruction) -> ir.Instruction:
+    def decode_load_global(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.LoadGlobal(instr.argument)
 
-    def decode_call(self, instr: Instruction) -> ir.Instruction:
+    def decode_call(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         return ir.Call(instr.argument)
 
     COMPARE_PREDICATES = {p.value: p for p in (
@@ -322,7 +325,7 @@ class InstructionDecoder:
         ir.ComparePredicate.IS_NOT,)
     }
 
-    def decode_compare(self, instr: Instruction) -> ir.Instruction:
+    def decode_compare(self, offset: Offset, instr: Instruction) -> ir.Instruction:
         predicate = self.COMPARE_PREDICATES.get(instr.argument, None)
         if predicate is None:
             name = dis.cmp_op[instr.argument]
@@ -376,7 +379,7 @@ def disassemble(code: bytes) -> ir.ControlFlowGraph:
         is_loop_header = False
         is_loop_footer = False
         ir_instrs = []
-        for instr in BytecodeIterator(code, start, end):
+        for offset, instr in BytecodeIterator(code, start, end):
             if instr.opcode == Opcode.POP_BLOCK:
                 is_loop_footer = True
             elif instr.opcode == Opcode.SETUP_LOOP:
@@ -384,7 +387,7 @@ def disassemble(code: bytes) -> ir.ControlFlowGraph:
             else:
                 if start >= 2 and code[start - 2] == Opcode.SETUP_LOOP:
                     is_loop_header = True
-                ir_instrs.append(decoder.decode(instr))
+                ir_instrs.append(decoder.decode(offset, instr))
         blocks.append(ir.BasicBlock(
             labels[start], ir_instrs, is_loop_header, is_loop_footer))
     return ir.build_initial_cfg(blocks)

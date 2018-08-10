@@ -26,31 +26,31 @@ class InstructionEncoder:
         elif isinstance(instr, ir.Load):
             return self.encode_load(instr)
         elif isinstance(instr, ir.LoadAttr):
-            return Instruction(0, Opcode.LOAD_ATTR, instr.index)
+            return Instruction(Opcode.LOAD_ATTR, instr.index)
         elif isinstance(instr, ir.UnaryOperation) and instr.kind == ir.UnaryOperationKind.NOT:
-            return Instruction(0, Opcode.UNARY_NOT, 0)
+            return Instruction(Opcode.UNARY_NOT, 0)
         elif isinstance(instr, ir.Store):
-            return Instruction(0, Opcode.STORE_FAST, instr.index)
+            return Instruction(Opcode.STORE_FAST, instr.index)
         elif isinstance(instr, ir.Branch):
             dest_offset = self.offsets[instr.target]
             delta = dest_offset - (offset + INSTRUCTION_SIZE_B)
             if delta >= 0 and delta < 256:
-                return Instruction(0, Opcode.JUMP_FORWARD, delta)
-            return Instruction(0, Opcode.JUMP_ABSOLUTE, self.offsets[instr.target])
+                return Instruction(Opcode.JUMP_FORWARD, delta)
+            return Instruction(Opcode.JUMP_ABSOLUTE, self.offsets[instr.target])
         elif isinstance(instr, ir.PopTop):
-            return Instruction(0, Opcode.POP_TOP, 0)
+            return Instruction(Opcode.POP_TOP, 0)
         elif isinstance(instr, ir.StoreAttr):
-            return Instruction(0, Opcode.STORE_ATTR, instr.index)
+            return Instruction(Opcode.STORE_ATTR, instr.index)
         elif isinstance(instr, ir.LoadGlobal):
-            return Instruction(0, Opcode.LOAD_GLOBAL, instr.index)
+            return Instruction(Opcode.LOAD_GLOBAL, instr.index)
         elif isinstance(instr, ir.Call):
-            return Instruction(0, Opcode.CALL_FUNCTION, instr.num_args)
+            return Instruction(Opcode.CALL_FUNCTION, instr.num_args)
         elif isinstance(instr, ir.Compare):
-            return Instruction(0, Opcode.COMPARE_OP, instr.predicate.value)
+            return Instruction(Opcode.COMPARE_OP, instr.predicate.value)
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:
-        return Instruction(0, Opcode.RETURN_VALUE, 0)
+        return Instruction(Opcode.RETURN_VALUE, 0)
 
     POOL_OPCODES = {
         ir.VarPool.LOCALS: Opcode.LOAD_FAST,
@@ -58,7 +58,7 @@ class InstructionEncoder:
     }
 
     def encode_load(self, instr: ir.Load) -> Instruction:
-        return Instruction(0, self.POOL_OPCODES[instr.pool], instr.index)
+        return Instruction(self.POOL_OPCODES[instr.pool], instr.index)
 
     # This is a truth table mapping (pop_before_eval, jump_branch) to the
     # corresponding opcode.
@@ -76,7 +76,7 @@ class InstructionEncoder:
             offset = self.offsets[instr.true_branch]
         else:
             offset = self.offsets[instr.false_branch]
-        return Instruction(0, opcode, offset)
+        return Instruction(opcode, offset)
 
 
 def assemble(cfg: ir.ControlFlowGraph) -> bytes:
