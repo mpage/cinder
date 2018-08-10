@@ -11,7 +11,8 @@ It is composed of the following modules:
 
 - `cinder.bytecode` - Helper functions for working with Python bytecode.
 - `cinder.ir` - A simple, stack-based IR that abstracts away some of the redundancy found in Python bytecode.
-- `cinder.jit` - Simple, template-style x86-64 code generation for Python opcodes and helpers to generate the equivalent machine code for a Python function.
+- `cinder.codegen.bytecode` - Generate Python bytecode from IR.
+- `cinder.codegen.x64` - Simple, template-style x86-64 code generation for Python opcodes and helpers to generate the equivalent machine code for a Python function.
 
 The pipeline for compiling a Python function into machine-code is fairly straight-foward:
 
@@ -27,14 +28,14 @@ code from it immediately.
 Compile and execute a simple function:
 
 ```
-from cinder import jit
+from cinder.codegen import x64
 
 def is_truthy(x):
   if x:
      return True
   return False
 
-compiled = jit.compile(is_truthy)
+compiled = x64.compile(is_truthy)
 
 print(compiled(1))
 ```
