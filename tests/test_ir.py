@@ -1,6 +1,7 @@
 import pytest
 
-from cinder import bytecode
+from cinder.bytecode import disassemble
+from cinder.codegen.bytecode import assemble
 
 
 def single_block():
@@ -230,7 +231,7 @@ bb3:
   RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
-    cfg = bytecode.disassemble(function.__code__.co_code)
+    cfg = disassemble(function.__code__.co_code)
     assert str(cfg) == expected_ir
 
 
@@ -253,6 +254,6 @@ def test_disassemble(function, expected_ir):
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code
-    cfg = bytecode.disassemble(expected)
-    actual = bytecode.assemble(cfg)
+    cfg = disassemble(expected)
+    actual = assemble(cfg)
     assert actual == expected
