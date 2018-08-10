@@ -1,4 +1,4 @@
-from cinder import jit
+from cinder.codegen import x64
 
 
 def identity(x):
@@ -89,25 +89,25 @@ def cmp_is(x, y):
 
 
 def test_load_fast_and_return_value():
-    foo = jit.compile(identity)
+    foo = x64.compile(identity)
     assert foo(100) == 100
 
 
 def test_load_attr():
-    x = jit.compile(get_bar)
+    x = x64.compile(get_bar)
     foo = Foo('testing 123')
     assert x(foo) == 'testing 123'
 
 
 def test_invert():
-    jit_invert = jit.compile(invert)
-    assert jit_invert(False) == True
-    assert jit_invert(True) == False
-    assert jit_invert(1) == False
+    x64_invert = x64.compile(invert)
+    assert x64_invert(False) == True
+    assert x64_invert(True) == False
+    assert x64_invert(1) == False
 
 
 def test_pop_jump():
-    test = jit.compile(pop_jump)
+    test = x64.compile(pop_jump)
     assert test(True, 1, 2) == 1
     assert test(False, 1, 2) == 2
     assert test(1, 'foo', 'bar') == 'foo'
@@ -115,7 +115,7 @@ def test_pop_jump():
 
 
 def test_jump_if_true():
-    test = jit.compile(jump_if_true)
+    test = x64.compile(jump_if_true)
     assert test(True, False) == True
     assert test(False, 1) == 1
     assert test(0, 'foo') == 'foo'
@@ -123,7 +123,7 @@ def test_jump_if_true():
 
 
 def test_jump_if_false():
-    test = jit.compile(jump_if_false)
+    test = x64.compile(jump_if_false)
     assert test(False, 1) == False
     assert test(True, 1) == 1
     assert test(0, 'foo') == 0
@@ -131,52 +131,52 @@ def test_jump_if_false():
 
 
 def test_load_const():
-    test = jit.compile(load_const)
+    test = x64.compile(load_const)
     assert test() == 100
 
 
 def test_store_attr():
-    test = jit.compile(set_bar)
+    test = x64.compile(set_bar)
     foo = Foo(None)
     test(foo, 'testing 123')
     assert foo.bar == 'testing 123'
 
 
 def test_load_global():
-    test = jit.compile(load_global)
+    test = x64.compile(load_global)
     assert test() == 'testing 123'
 
 
 def test_call():
-    test_call0 = jit.compile(call0)
+    test_call0 = x64.compile(call0)
     assert test_call0(load_const) == 100
 
-    test_call1 = jit.compile(call1)
+    test_call1 = x64.compile(call1)
     assert test_call1(identity, 'testing') == 'testing'
 
-    test_call3 = jit.compile(call3)
+    test_call3 = x64.compile(call3)
     assert test_call3(get_third, 1, 2, 3) == 3
 
 
 def test_store():
-    test = jit.compile(store_local)
+    test = x64.compile(store_local)
     assert test(10) == 10
 
 
 def test_while_loop():
-    test = jit.compile(while_loop)
+    test = x64.compile(while_loop)
     assert test(True, 0) == 0
 
 
 def test_jump_forward():
-    test = jit.compile(jump_forward)
+    test = x64.compile(jump_forward)
     assert test(True, True) == 1
     assert test(True, False) == None
     assert test(False, False) == 2
 
 
 def test_is():
-    test = jit.compile(cmp_is)
+    test = x64.compile(cmp_is)
     assert test(1, 1) == True
     assert test(1, 2) == False
 
@@ -185,6 +185,6 @@ def test_is_not():
     def f(x, y):
         return x is not y
 
-    test = jit.compile(f)
+    test = x64.compile(f)
     assert test(1, 1) == False
     assert test(1, 2) == True

@@ -11,7 +11,7 @@ based on a Java version:
 import argparse
 
 import cinder
-from cinder import jit
+from cinder.codegen import x64
 import time
 
 # Task IDs
@@ -427,10 +427,10 @@ if __name__ == "__main__":
     richards = Richards()
     if args.use_jit:
         cinder.install_interpreter()
-        TaskState.isTaskHoldingOrWaiting = jit.compile(TaskState.isTaskHoldingOrWaiting)
-        TaskState.isWaitingWithPacket = jit.compile(TaskState.isWaitingWithPacket)
-        Task.runTask = jit.compile(Task.runTask)
-        schedule = jit.compile(schedule)
+        TaskState.isTaskHoldingOrWaiting = x64.compile(TaskState.isTaskHoldingOrWaiting)
+        TaskState.isWaitingWithPacket = x64.compile(TaskState.isWaitingWithPacket)
+        Task.runTask = x64.compile(Task.runTask)
+        schedule = x64.compile(schedule)
     start = time.time()
     richards.run(args.num_iters)
     elapsed = time.time() - start
