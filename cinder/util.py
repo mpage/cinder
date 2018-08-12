@@ -16,8 +16,8 @@ class DlInfo(ctypes.Structure):
 
 DlInfoPointer = ctypes.POINTER(DlInfo)
 
-
-libdl = ctypes.CDLL(None)  # type: ignore  -- Incorrect typeshed stub
+# Incorrect typeshed stub
+libdl = ctypes.CDLL(None)  # type: ignore
 libdl.dlsym.restype = ctypes.c_void_p
 
 libdl.dladdr.argtypes = [ctypes.c_void_p, DlInfoPointer]
