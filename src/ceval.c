@@ -3420,11 +3420,18 @@ Error:
     return 0;
 }
 
+static int my_eval_breaker = 0;
+
 extern PyTypeObject JitFunctionType;
 
 void*
 get_call_function_address() {
   return &call_function;
+}
+
+void*
+get_my_eval_breaker_address() {
+    return &my_eval_breaker;
 }
 
 static PyObject *
