@@ -45,7 +45,7 @@ def get_private_symbol(lib: ctypes.CDLL, symbol_name: str, known_symbol_name: st
     # value.
     start_addr = -1
     for segment in binary.segments:
-        if segment.file_offset == 0:
+        if segment.name == '__TEXT':
             start_addr = segment.virtual_address
             break
     if start_addr == -1:

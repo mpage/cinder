@@ -10,5 +10,5 @@ _cinder.get_my_eval_breaker_address.restype = ctypes.c_void_p
 
 
 def test_get_private_symbol():
-    val = get_private_symbol(_cinder, '_my_eval_breaker', 'get_my_eval_breaker_address')
+    val = get_private_symbol(_cinder, '_eval_breaker_storage', 'get_my_eval_breaker_address')
     assert val == _cinder.get_my_eval_breaker_address()

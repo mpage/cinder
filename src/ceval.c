@@ -1,5 +1,5 @@
-
 /* Execute compiled code */
+#define Py_BUILD_CORE
 
 #include <Python.h>
 
@@ -44,80 +44,32 @@ static void format_awaitable_error(PyTypeObject *, int);
     "free variable '%.200s' referenced before assignment" \
     " in enclosing scope"
 
-#define GIL_REQUEST _Py_atomic_load_relaxed(&gil_drop_request)
+/* This single variable consolidates all requests to break out of the fast path
+   in the eval loop. */
+static _Py_atomic_int eval_breaker_storage = {0};
+static _Py_atomic_int* eval_breaker = &eval_breaker_storage;
+
+/* Request for running pending calls. */
+static _Py_atomic_int pendingcalls_storage = {0};
+static _Py_atomic_int* pendingcalls = &pendingcalls_storage;
+
+void initialize_scheduler(_Py_atomic_int* eval_breaker_addr, _Py_atomic_int* pendingcalls_addr) {
+    printf("ceval orig evalb=%p pendingcalls=%p\n", eval_breaker, pendingcalls);
+    printf("ceval evalb=%p pendingcalls=%p\n", eval_breaker_addr, pendingcalls_addr);
+    eval_breaker = eval_breaker_addr;
+    pendingcalls = pendingcalls_addr;
+}
 
 /* This can set eval_breaker to 0 even though gil_drop_request became
    1.  We believe this is all right because the eval loop will release
    the GIL eventually anyway. */
 #define COMPUTE_EVAL_BREAKER() \
     _Py_atomic_store_relaxed( \
-        &eval_breaker, \
-        GIL_REQUEST | \
-        _Py_atomic_load_relaxed(&pendingcalls_to_do) | \
-        pending_async_exc)
-
-#define SET_GIL_DROP_REQUEST() \
-    do { \
-        _Py_atomic_store_relaxed(&gil_drop_request, 1); \
-        _Py_atomic_store_relaxed(&eval_breaker, 1); \
-    } while (0)
-
-#define RESET_GIL_DROP_REQUEST() \
-    do { \
-        _Py_atomic_store_relaxed(&gil_drop_request, 0); \
-        COMPUTE_EVAL_BREAKER(); \
-    } while (0)
-
-/* Pending calls are only modified under pending_lock */
-#define SIGNAL_PENDING_CALLS() \
-    do { \
-        _Py_atomic_store_relaxed(&pendingcalls_to_do, 1); \
-        _Py_atomic_store_relaxed(&eval_breaker, 1); \
-    } while (0)
-
-#define UNSIGNAL_PENDING_CALLS() \
-    do { \
-        _Py_atomic_store_relaxed(&pendingcalls_to_do, 0); \
-        COMPUTE_EVAL_BREAKER(); \
-    } while (0)
-
-#define SIGNAL_ASYNC_EXC() \
-    do { \
-        pending_async_exc = 1; \
-        _Py_atomic_store_relaxed(&eval_breaker, 1); \
-    } while (0)
-
-#define UNSIGNAL_ASYNC_EXC() \
-    do { pending_async_exc = 0; COMPUTE_EVAL_BREAKER(); } while (0)
-
+        eval_breaker, \
+        _Py_atomic_load_relaxed(pendingcalls))
 
 #include <errno.h>
 #include <pythread.h>
-
-/* Mechanism whereby asynchronously executing callbacks (e.g. UNIX
-   signal handlers or Mac I/O completion routines) can schedule calls
-   to a function to be called synchronously.
-   The synchronous function is called with one void* argument.
-   It should return 0 for success or -1 for failure -- failure should
-   be accompanied by an exception.
-
-   If registry succeeds, the registry function returns 0; if it fails
-   (e.g. due to too many pending calls) it returns -1 (without setting
-   an exception condition).
-
-   Note that because registry may occur from within signal handlers,
-   or other asynchronous events, calling malloc() is unsafe!
-
-#ifdef WITH_THREAD
-   Any thread can schedule pending calls, but only the main thread
-   will execute them.
-   There is no facility to schedule calls to a particular thread, but
-   that should be easy to change, should that ever be required.  In
-   that case, the static variables here should go into the python
-   threadstate.
-#endif
-*/
-
 
 /* The interpreter's recursion limit */
 
@@ -201,7 +153,14 @@ cinder_eval_frame(PyFrameObject *f, int throwflag)
 #define TARGET(op) \
     case op:
 
-#define DISPATCH() continue
+#define DISPATCH()                                          \
+    {                                                       \
+        if (!_Py_atomic_load_relaxed(eval_breaker)) {       \
+            FAST_DISPATCH();                                \
+        }                                                   \
+        continue;                                           \
+    }
+
 #define FAST_DISPATCH() goto fast_next_opcode
 
 /* Tuple access macros */
@@ -349,6 +308,44 @@ cinder_eval_frame(PyFrameObject *f, int throwflag)
         assert(stack_pointer >= f->f_valuestack); /* else underflow */
         assert(STACK_LEVEL() <= co->co_stacksize);  /* else overflow */
         assert(!PyErr_Occurred());
+
+        /* Do periodic things.  Doing this every time through
+           the loop would add too much overhead, so we do it
+           only every Nth instruction.  We also do it if
+           ``pendingcalls_to_do'' is set, i.e. when an asynchronous
+           event needs attention (e.g. a signal handler or
+           async I/O handler); see Py_AddPendingCall() and
+           Py_MakePendingCalls() above. */
+
+        if (_Py_atomic_load_relaxed(eval_breaker)) {
+            opcode = _Py_OPCODE(*next_instr);
+            if (opcode == SETUP_FINALLY ||
+                opcode == SETUP_WITH ||
+                opcode == BEFORE_ASYNC_WITH ||
+                opcode == YIELD_FROM) {
+                /* Few cases where we skip running signal handlers and other
+                   pending calls:
+                   - If we're about to enter the 'with:'. It will prevent
+                     emitting a resource warning in the common idiom
+                     'with open(path) as file:'.
+                   - If we're about to enter the 'async with:'.
+                   - If we're about to enter the 'try:' of a try/finally (not
+                     *very* useful, but might help in some cases and it's
+                     traditional)
+                   - If we're resuming a chain of nested 'yield from' or
+                     'await' calls, then each frame is parked with YIELD_FROM
+                     as its next opcode. If the user hit control-C we want to
+                     wait until we've reached the innermost frame before
+                     running the signal handler and raising KeyboardInterrupt
+                     (see bpo-30039).
+                */
+                goto fast_next_opcode;
+            }
+            if (_Py_atomic_load_relaxed(pendingcalls)) {
+                if (Py_MakePendingCalls() < 0)
+                    goto error;
+            }
+        }
 
     fast_next_opcode:
         f->f_lasti = INSTR_OFFSET();
@@ -3420,8 +3417,6 @@ Error:
     return 0;
 }
 
-static int my_eval_breaker = 0;
-
 extern PyTypeObject JitFunctionType;
 
 void*
@@ -3431,7 +3426,7 @@ get_call_function_address() {
 
 void*
 get_my_eval_breaker_address() {
-    return &my_eval_breaker;
+    return &eval_breaker_storage;
 }
 
 static PyObject *
