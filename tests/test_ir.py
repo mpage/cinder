@@ -83,6 +83,10 @@ def loop_with_setup(x, y):
     return x
 
 
+def binary_and(x, y):
+    return x & y
+
+
 @pytest.mark.parametrize("function,expected_ir", [
     (single_block, """entry:
 bb0:
@@ -229,6 +233,13 @@ bb2:
 bb3:
   LOAD 0 LOCALS
   RETURN_VALUE"""),
+
+    (binary_and, """entry:
+bb0:
+  LOAD 0 LOCALS
+  LOAD 1 LOCALS
+  BIN_OP AND
+  RETURN_VALUE"""),
 ])
 def test_disassemble(function, expected_ir):
     cfg = disassemble(function.__code__.co_code)
@@ -251,6 +262,7 @@ def test_disassemble(function, expected_ir):
     cmp_is,
     cmp_is_not,
     loop_with_setup,
+    binary_and,
 ])
 def test_reassemble(function):
     expected = function.__code__.co_code

@@ -47,6 +47,8 @@ class InstructionEncoder:
             return Instruction(Opcode.CALL_FUNCTION, instr.num_args)
         elif isinstance(instr, ir.Compare):
             return Instruction(Opcode.COMPARE_OP, instr.predicate.value)
+        elif isinstance(instr, ir.BinaryOperation):
+            return self.encode_binary_operation(instr)
         raise ValueError(f'Cannot encode ir instruction {instr}')
 
     def encode_return(self, instr: ir.ReturnValue) -> Instruction:
@@ -77,6 +79,16 @@ class InstructionEncoder:
         else:
             offset = self.offsets[instr.false_branch]
         return Instruction(opcode, offset)
+
+    BINARY_OPERATOR_OPCODES = {
+        ir.BinaryOperator.AND: Opcode.BINARY_AND
+    }
+
+    def encode_binary_operation(self, instr: ir.BinaryOperation) -> Instruction:
+        opcode = self.BINARY_OPERATOR_OPCODES.get(instr.operator, None)
+        if opcode is None:
+            raise ValueError(f'Cannot encode ir instruction {instr}')
+        return Instruction(opcode, 0)
 
 
 def assemble(cfg: ir.ControlFlowGraph) -> bytes:

@@ -332,8 +332,19 @@ class InstructionDecoder:
             raise ValueError(f"Cannot decode compare predicate {name}")
         return ir.Compare(predicate)
 
+    BINARY_OPERATORS = {
+        Opcode.BINARY_AND: ir.BinaryOperator.AND,
+    }
+
+    def decode_binary_op(self, offset: Offset, instr: Instruction) -> ir.Instruction:
+        operator = self.BINARY_OPERATORS.get(instr.opcode, None)
+        if operator is None:
+            raise ValueError(f'Cannot decode {dis.opname[instr.opcode]}')
+        return ir.BinaryOperation(operator)
+
     decoders = {
         Opcode.CALL_FUNCTION: decode_call,
+        Opcode.BINARY_AND: decode_binary_op,
         Opcode.COMPARE_OP: decode_compare,
         Opcode.JUMP_ABSOLUTE: decode_branch,
         Opcode.JUMP_FORWARD: decode_jump_forward,

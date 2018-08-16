@@ -71,6 +71,18 @@ class ConditionalBranch(Instruction):
         return f'COND_BRANCH true={self.true_branch} false={self.false_branch}'
 
 
+class BinaryOperator(enum.Enum):
+    AND    = '&'
+
+
+class BinaryOperation(Instruction):
+    def __init__(self, operator: BinaryOperator) -> None:
+        self.operator = operator
+
+    def __str__(self) -> str:
+        return f"BIN_OP {self.operator.name}"
+
+
 class Branch(Instruction):
     def __init__(self, target: Label) -> None:
         self.target = target
